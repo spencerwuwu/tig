@@ -1,69 +1,3 @@
-//import com.google.common.base.Strings;
-//import ghidra.app.util.headless.HeadlessScript;
-//import ghidra.app.script.GhidraState;
-//import ghidra.program.model.address.Address;
-//import ghidra.program.model.address.AddressRange;
-//import ghidra.program.model.address.AddressRangeIterator;
-//import ghidra.program.model.address.AddressSet;
-//import ghidra.program.model.block.BasicBlockModel;
-//import ghidra.program.model.block.CodeBlock;
-//import ghidra.program.model.block.CodeBlockIterator;
-//import ghidra.program.model.block.CodeBlockModel;
-//import ghidra.program.model.listing.*;
-//import ghidra.program.model.mem.Memory;
-//import ghidra.program.model.mem.MemoryBlock;
-//import ghidra.program.model.mem.MemoryBlockSourceInfo;
-//import ghidra.program.model.pcode.PcodeOp;
-//import ghidra.util.exception.CancelledException;
-//import ghidra.util.task.TaskMonitor;
-//import ghidra.program.model.lang.Register;
-//import ghidra.program.model.lang.RegisterValue;
-//import ghidra.program.model.symbol.Reference;
-//import ghidra.program.model.block.CodeBlockReferenceIterator;
-//import ghidra.program.model.symbol.ReferenceIterator;
-//import ghidra.program.model.symbol.RefType;
-//
-//import java.io.IOException;
-//import java.util.*;
-//import java.util.function.Predicate;
-//import java.util.stream.Collectors;
-//import java.math.BigInteger;
-//
-//public class GetBasicBlocks extends HeadlessScript {
-//    @Override
-//    public void run() throws Exception {
-//            String response;
-//            response = new GetBasicBlocks.Result().toJson();
-//            println(response);
-//
-//        } catch(Exception e) {
-//            println(e.toString());
-//            throw e;
-//        }
-//    }
-//
-//    class Result {
-//        final List<GetBasicBlocks.ResultBasicBlock> basicBlocks;
-//
-//        Result(Address startOffset, Address startAddr) throws CancelledException {
-//            CodeBlockModel blockModel = new BasicBlockModel(currentProgram);
-//            Function function = currentProgram.getFunctionManager().getFunctionAt(startAddr);
-//
-//            this.basicBlocks = new ArrayList<>();
-//            CodeBlockIterator iterator = blockModel.getCodeBlocksContaining(function.getBody(), monitor);
-//            while (iterator.hasNext()) {
-//                this.basicBlocks.add(new GetBasicBlocks.ResultBasicBlock(function.getEntryPoint(), iterator.next()));
-//            }
-//        }
-//
-//        String toJson() {
-//            String bbString = basicBlocks.stream()
-//                    .map(GetBasicBlocks.ResultBasicBlock::toJson)
-//                    .collect(Collectors.joining(", "));
-//            return String.format("[%s]", bbString);
-//        }
-//    }
-//}
 import com.google.common.base.Strings;
 import ghidra.app.util.headless.HeadlessScript;
 import ghidra.app.script.GhidraState;
@@ -100,20 +34,22 @@ public class GetBasicBlocks extends HeadlessScript {
     public void run() throws Exception {
         try {
             Function func = getFirstFunction();
-            //if (func == null) {
-            //    println("No Function");
-            //} else {
-            //    while (func != null) {
-            //        println(func.getName());
-            //        func = getFunctionAfter(func);
-            //    }
+            if (func == null) {
+                System.out.println("No Function Found >o<");
+            } else {
+                while (func != null) {
+                    System.out.println("===  " + func.getName());
+                    Address startAddr = func.getEntryPoint();
+                    String response;
 
-            //}
-            Address startAddr = func.getEntryPoint();
-            String response;
+                    response = new GetBasicBlocks.Result(startAddr).toJson();
+                    for (String s: response.split(", "))
+                        System.out.println(s);
 
-            response = new GetBasicBlocks.Result(startAddr).toJson();
-            println(response);
+                    func = getFunctionAfter(func);
+                }
+
+            }
         } catch(Exception e) {
             println(e.toString());
             throw e;
@@ -148,6 +84,8 @@ public class GetBasicBlocks extends HeadlessScript {
         final long bb_size;
         final boolean is_exit_point;
         final long exit_vaddr;
+        final boolean is_entry_point;
+        final List<String> source_vaddrs;
         String instruction_mode;
 
         ResultBasicBlock(Address functionStart, CodeBlock codeBlock) throws CancelledException {
@@ -161,6 +99,7 @@ public class GetBasicBlocks extends HeadlessScript {
 
             Function function = currentProgram.getFunctionManager().getFunctionAt(functionStart);
 
+            //- Determine is_exit_point or get exit_vaddr
             boolean is_exit_point = true;
             long exit_vaddr = -1;
             CodeBlockReferenceIterator iterator = codeBlock.getDestinations(monitor);
@@ -178,7 +117,23 @@ public class GetBasicBlocks extends HeadlessScript {
             this.exit_vaddr = exit_vaddr;
             this.is_exit_point = is_exit_point;
 
-            // Try to get the Thumb register and check its value
+            //- Get source_vaddrs
+            if (this.bb_start_vaddr == functionStart.getOffset())
+                this.is_entry_point = true;
+            else
+                this.is_entry_point = false;
+
+            this.source_vaddrs = new ArrayList<>();
+            iterator = codeBlock.getSources(monitor);
+            while (iterator.hasNext()) {
+                CodeBlock source_bb = iterator.next().getSourceBlock();
+                AddressRange source_bb_addressRange = source_bb.getAddressRanges().next();
+                //Address source_vaddr = source_bb.getAddressRanges().next().getMinRanges().getOffset();
+                long source_vaddr = source_bb_addressRange.getMinAddress().getOffset();
+                this.source_vaddrs.add(Long.toUnsignedString(source_vaddr));
+            }
+
+            //- Try to get the Thumb register and check its value
             try {
                 Register tmode_register = currentProgram.getRegister("TMode");
                 RegisterValue function_mode = currentProgram.getProgramContext().getRegisterValue(tmode_register, addressRange.getMinAddress());
@@ -186,7 +141,7 @@ public class GetBasicBlocks extends HeadlessScript {
             } catch(Exception e) {
                 this.instruction_mode = "NONE";
             }
-            // Try to get the vle register and check its value
+            //- Try to get the vle register and check its value
             try {
                 Register vle_register = currentProgram.getRegister("vle");
                 RegisterValue function_mode = currentProgram.getProgramContext().getRegisterValue(vle_register, addressRange.getMinAddress());
@@ -197,14 +152,36 @@ public class GetBasicBlocks extends HeadlessScript {
         }
 
         String toJson() {
-            return String.format(
-                "{\"bb_start_vaddr\":%s,\"bb_size\":%s,\"is_exit_point\":%b,\"instr_mode\":\"%s\",\"exit_vaddr\":%s}", 
-                Long.toUnsignedString(bb_start_vaddr), 
-                Long.toUnsignedString(bb_size), 
-                is_exit_point, 
-                instruction_mode, 
-                Long.toUnsignedString(exit_vaddr)
-            );
+            return "{" +
+                String.format(
+                        "\"bb_start_vaddr\":%s,",
+                        Long.toUnsignedString(bb_start_vaddr)
+                        ) + 
+                String.format(
+                        "\"bb_size\":%s,",
+                        Long.toUnsignedString(bb_size)
+                        ) + 
+                String.format(
+                        "\"is_exit_point\":%b,",
+                        is_exit_point
+                        ) + 
+                String.format(
+                        "\"exit_vaddr\":%s,", 
+                        Long.toUnsignedString(exit_vaddr)
+                        ) + 
+                String.format(
+                        "\"is_entry_point\":%b,",
+                        is_entry_point
+                        ) + 
+                String.format(
+                        "\"source_vaddrs\":[%s],", 
+                        String.join(",", source_vaddrs)
+                        ) + 
+                String.format(
+                        "\"instr_mode\":\"%s\"",
+                        instruction_mode
+                        ) + 
+                "}";
         }
     }
 
