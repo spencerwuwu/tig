@@ -150,7 +150,6 @@ public class GetBasicBlocks extends HeadlessScript {
             while (iterator.hasNext()) {
                 CodeBlock source_bb = iterator.next().getSourceBlock();
                 AddressRange source_bb_addressRange = source_bb.getAddressRanges().next();
-                //Address source_vaddr = source_bb.getAddressRanges().next().getMinRanges().getOffset();
                 long source_vaddr = source_bb_addressRange.getMinAddress().getOffset();
                 this.source_vaddrs.add(Long.toUnsignedString(source_vaddr));
             }
@@ -181,13 +180,15 @@ public class GetBasicBlocks extends HeadlessScript {
             if (instruction == null) {
                 instruction = getInstructionAfter(functionStart);
             }
-            Address endAddr = function.getBody().getMaxAddress();
-            while (instruction != null && instruction.getAddress().getOffset() <= endAddr.getOffset()) {
+            Address endAddr = addressRange.getMaxAddress();
+            while (instruction != null && instruction.getAddress().getOffset() < endAddr.getOffset()) {
                 this.instructions.add(new GetBasicBlocks.ResultInstruction(instruction));
                 instruction = getInstructionAfter(instruction);
+
             }
             for (GetBasicBlocks.ResultInstruction instr: this.instructions) 
                 this.instr_jsons.add(instr.toJson());
+            System.out.println("");
 
         }
 
