@@ -22,12 +22,11 @@ fi
 binary=$1
 out_json=$2
 
-guestname=$(whoami)
 binary_path=$(realpath $(dirname $binary))
 binary_name=$(basename $binary)
 
 container_id=$(docker run -dt --rm \
-    -v ${binary_path}:/samples ghidra-${guestname} \
+    -v ${binary_path}:/samples ghidra-bbextract \
     /samples/${binary_name}
 )
 container_id=$(cut -c-12 <<< $container_id)
