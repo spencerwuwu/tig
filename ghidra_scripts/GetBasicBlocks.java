@@ -102,8 +102,8 @@ public class GetBasicBlocks extends HeadlessScript {
         final long bb_start_vaddr;
         final long bb_size;
         final boolean is_exit_point;
-        final long exit_vaddr;
         final boolean is_entry_point;
+        final List<String> exit_vaddrs;
         final List<String> source_vaddrs;
         final List<GetBasicBlocks.ResultInstruction> instructions;
         final List<String> instr_jsons;
@@ -114,14 +114,19 @@ public class GetBasicBlocks extends HeadlessScript {
             if (codeBlock.getNumAddressRanges() > 1) {
                 throw new RuntimeException("This is unexpected... figure out why this happens");
             }
-            AddressRange addressRange = codeBlock.getAddressRanges().next();
 
-            this.bb_start_vaddr = addressRange.getMinAddress().getOffset();
+            AddressRange addressRange = codeBlock.getAddressRanges().next();
+            Address bb_startAddr = addressRange.getMinAddress();
+            Address bb_endAddr = addressRange.getMaxAddress();
+
+            this.bb_start_vaddr = bb_startAddr.getOffset();
             this.bb_size = addressRange.getLength();
 
             Function function = currentProgram.getFunctionManager().getFunctionAt(functionStart);
 
             //- Determine is_exit_point or get exit_vaddr
+            this.exit_vaddrs = new ArrayList<>();
+
             boolean is_exit_point = true;
             long exit_vaddr = -1;
             CodeBlockReferenceIterator iterator = codeBlock.getDestinations(monitor);
@@ -129,14 +134,17 @@ public class GetBasicBlocks extends HeadlessScript {
                 CodeBlock successor_bb = iterator.next().getDestinationBlock();
                 AddressRange successor_bb_addressRange = successor_bb.getAddressRanges().next();
                 // Check if the successor is in the function (in the ComplexBlock), discard the destinations that are not.
-                if (successor_bb_addressRange.getMinAddress().getOffset() >= function.getBody().getMinAddress().getOffset() && successor_bb_addressRange.getMaxAddress().getOffset() <= function.getBody().getMaxAddress().getOffset()){
-                    is_exit_point = false;
-                    if(exit_vaddr == -1 || successor_bb_addressRange.getMinAddress().getOffset() == addressRange.getMaxAddress().getOffset()+1) {
+                if (successor_bb_addressRange.getMinAddress().getOffset() >= function.getBody().getMinAddress().getOffset() 
+                        && successor_bb_addressRange.getMaxAddress().getOffset() <= function.getBody().getMaxAddress().getOffset()
+                        )
+                {
+                    if(successor_bb_addressRange.getMinAddress().getOffset() > addressRange.getMaxAddress().getOffset()) {
+                        is_exit_point = false;
                         exit_vaddr = successor_bb_addressRange.getMinAddress().getOffset();
+                        this.exit_vaddrs.add(Long.toUnsignedString(exit_vaddr));
                     }
                 }
             }
-            this.exit_vaddr = exit_vaddr;
             this.is_exit_point = is_exit_point;
 
             //- Get source_vaddrs
@@ -176,13 +184,11 @@ public class GetBasicBlocks extends HeadlessScript {
             this.instructions = new ArrayList<>();
             this.instr_jsons = new ArrayList<>();
             
-            Address startAddr = addressRange.getMinAddress();
-            Address endAddr = addressRange.getMaxAddress();
-            Instruction instruction = getInstructionAt(startAddr);
+            Instruction instruction = getInstructionAt(bb_startAddr);
             if (instruction == null) {
-                instruction = getInstructionAfter(startAddr);
+                instruction = getInstructionAfter(bb_startAddr);
             }
-            while (instruction != null && instruction.getAddress().getOffset() < endAddr.getOffset()) {
+            while (instruction != null && instruction.getAddress().getOffset() < bb_endAddr.getOffset()) {
                 this.instructions.add(new GetBasicBlocks.ResultInstruction(instruction));
                 instruction = getInstructionAfter(instruction);
 
@@ -207,8 +213,8 @@ public class GetBasicBlocks extends HeadlessScript {
                         is_exit_point
                         ) + 
                 String.format(
-                        "\"exit_vaddr\":%s,", 
-                        Long.toUnsignedString(exit_vaddr)
+                        "\"exit_vaddrs\":[%s],", 
+                        String.join(",", exit_vaddrs)
                         ) + 
                 String.format(
                         "\"is_entry_point\":%b,",

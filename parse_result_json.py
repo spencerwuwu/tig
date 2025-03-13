@@ -15,13 +15,24 @@ def print_bb(results):
         print(f"{block_addr:010x}  <{func_name}>:")
 
         for block in blocks:
+            preblock = "    > Src: " + ", ".join(f"{addr-GHIDRA_ADDR_OFFSET:x}" for addr in block["source_vaddrs"])
+            if block["is_entry_point"]:
+                preblock += "(entry)"
+            print(preblock)
             block_addr = block["bb_start_vaddr"] - GHIDRA_ADDR_OFFSET
             for instr in block["instructions"]:
                 byte_instr = instr["instruction_byte"]
                 str_instr = instr["instruction_str"]
-                addr = block_addr + instr["instr_offset"] - GHIDRA_ADDR_OFFSET
+                addr = instr["instr_offset"] - GHIDRA_ADDR_OFFSET
                 print(f"{addr:4x}:   {byte_instr:20s} {str_instr}")
+
+            problock = "    > Dst: " + ", ".join(f"{addr-GHIDRA_ADDR_OFFSET:x}" for addr in block["exit_vaddrs"])
+            if block["is_exit_point"]:
+                problock += "(exit)"
+            print(problock)
+
             print()
+        print()
 
 
 

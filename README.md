@@ -23,11 +23,10 @@ For example, `example/example.json` is created with ```./get_ghidra_basicblocks.
         "function_name": "xx",
         "blocks": [
             {
-                "bb_start_vaddr": (long),       # basic block starting virtual address
+                "bb_start_vaddr": (long),       # basic block virtual start address
                 "bbsize": (long),               # basic block size
                 "is_exit_point": (boolean),     # end of function? 
-                                                #  if true then `exit_vaddr` should be ignored
-                "exit_vaddr": (long),           # address of the successor block
+                "exit_vaddrs": [(long), ...],   # addresses of the successor blocks
                 "is_entry_point": (boolean),    # start of function?
                 "source_vaddrs": [(long), ...], # addresses of the predecessor blocks
                 "instr_mode": (boolean)         # Thumb mode? vle mode? Or `none`
