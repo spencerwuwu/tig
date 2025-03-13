@@ -3,7 +3,8 @@ import json
 import sys
 import argparse
 
-GHIDRA_ADDR_OFFSET = 0x100000
+#GHIDRA_ADDR_OFFSET = 0x100000
+GHIDRA_ADDR_OFFSET = 0
 
 def print_bb(results):
     for func_data in results:
@@ -24,7 +25,7 @@ def print_bb(results):
                 byte_instr = instr["instruction_byte"]
                 str_instr = instr["instruction_str"]
                 addr = instr["instr_offset"] - GHIDRA_ADDR_OFFSET
-                print(f"{addr:4x}:   {byte_instr:20s} {str_instr}")
+                print(f"{addr:7x}:   {byte_instr:20s} {str_instr}")
 
             problock = "    > Dst: " + ", ".join(f"{addr-GHIDRA_ADDR_OFFSET:x}" for addr in block["exit_vaddrs"])
             if block["is_exit_point"]:
