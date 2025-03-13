@@ -1,35 +1,47 @@
-# Ghidra Headless Analyzer
+# Ghidra Headless Basic Block Exactor
 
 ## Usage
 
-### Installation
-
-```
-git clone <xxx>
+1. Build the Docker image. This will create an image with your user id and name.
+```bash
 make build  
-docker run --rm -v <samples>/:/samples ghidra-$(whoami) <binary>
 ```
 
-### Running (legacy decompile)
-
-Analyse a sample in directory "<samples>/<binary>":  
-
+2. Collect basic blocks information and store in json file
+```bash
+./get_ghidra_basicblocks.sh <binary> <out_json>
 ```
-docker run --rm -v <samples>/:/samples ghidra-$(whoami) decompile /samples/<binary>
+For example, `example/example.json` is created with ```./get_ghidra_basicblocks.sh example/example.clang.0.o example/example.json```
+
+## Json format
 ```
-
-Or get possible arguments for the program:  
-
+[
+    {
+        "function_name": "xx",
+        "blocks": [
+            {
+                "bb_start_vaddr": (long),       # basic block starting virtual address
+                "bbsize": (long),               # basic block size
+                "is_exit_point": (boolean),     # end of function? 
+                                                #  if true then `exit_vaddr` should be ignored
+                "exit_vaddr": (long),           # address of the successor block
+                "is_entry_point": (boolean),    # start of function?
+                "source_vaddrs": [(long), ...], # addresses of the predecessor blocks
+                "instr_mode": (boolean)         # Thumb mode? vle mode? Or `none`
+                "instructions": [
+                    {
+                        "instr_offset": (long), # instruction address
+                        "instr_size": (long),   # length of the instruction
+                        "mnem": (str),          # get the mnemonic for this code unit, e.g., MOV, JMP
+                        "operands": (str),      # maybe more than 1, seperated with ,
+                        "regs_read": (str),     # ..
+                        "regs_written": (str),  # ..
+                        "results": (str),       # registers/addresses affected by this instruction
+                        "instruction_str": (str)
+                    }, ...
+                ]
+            }, ...
+        ]
+    }, ...
+]
 ```
-docker run --rm -v <samples>/:/samples ghidra-$(whoami) --help
-```
-
-## Project homepage
-
-https://ghidra-sre.org/
-
-See more about Headless Analyzer in [here.](https://ghidra.re/ghidra_docs/analyzeHeadlessREADME.html)
-
-## Licence
-
-Ghidra itself is distributed under Apache 2.0 licence, however all additional features included here are under MIT licence.

@@ -1,6 +1,7 @@
 # Custom folders
 .tmp
 .local
+*.json
 
 # IDE related
 .idea/

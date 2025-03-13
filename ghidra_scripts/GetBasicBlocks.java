@@ -1,3 +1,4 @@
+// Modified from ofrak (https://ofrak.com/)
 import com.google.common.base.Strings;
 import ghidra.app.util.headless.HeadlessScript;
 import ghidra.app.script.GhidraState;
@@ -24,6 +25,7 @@ import ghidra.program.model.symbol.ReferenceIterator;
 import ghidra.program.model.symbol.RefType;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -34,22 +36,37 @@ public class GetBasicBlocks extends HeadlessScript {
     public void run() throws Exception {
         try {
             Function func = getFirstFunction();
+            List<String> all_responses = new ArrayList<>();
+
             if (func == null) {
                 System.out.println("No Function Found >o<");
             } else {
                 while (func != null) {
-                    System.out.println("===  " + func.getName());
+                    //System.out.println("===  " + func.getName());
                     Address startAddr = func.getEntryPoint();
                     String response;
 
                     response = new GetBasicBlocks.Result(startAddr).toJson();
-                    for (String s: response.split(", "))
-                        System.out.println(s);
+                    //for (String s: response.split(", "))
+                    //    System.out.println(s);
+                    all_responses.add(
+                            "{" +
+                            String.format("\"function_name\":\"%s\",", func.getName()) +
+                            "\"blocks\":" + response +
+                            "}"
+                            );
 
                     func = getFunctionAfter(func);
                 }
-
             }
+            try (PrintWriter out = new PrintWriter("GetBasicBlocks_result.json")) {
+                out.println(all_responses);
+            } catch(Exception e) {
+                println(e.toString());
+                throw e;
+            }
+
+
         } catch(Exception e) {
             println(e.toString());
             throw e;
@@ -86,6 +103,9 @@ public class GetBasicBlocks extends HeadlessScript {
         final long exit_vaddr;
         final boolean is_entry_point;
         final List<String> source_vaddrs;
+        final List<GetBasicBlocks.ResultInstruction> instructions;
+        final List<String> instr_jsons;
+
         String instruction_mode;
 
         ResultBasicBlock(Address functionStart, CodeBlock codeBlock) throws CancelledException {
@@ -141,6 +161,7 @@ public class GetBasicBlocks extends HeadlessScript {
             } catch(Exception e) {
                 this.instruction_mode = "NONE";
             }
+
             //- Try to get the vle register and check its value
             try {
                 Register vle_register = currentProgram.getRegister("vle");
@@ -149,6 +170,23 @@ public class GetBasicBlocks extends HeadlessScript {
             } catch(Exception e) {
                 // Pass
             }
+
+            //- Get Instructions
+            this.instructions = new ArrayList<>();
+            this.instr_jsons = new ArrayList<>();
+            
+            Instruction instruction = getInstructionAt(functionStart);
+            if (instruction == null) {
+                instruction = getInstructionAfter(functionStart);
+            }
+            Address endAddr = function.getBody().getMaxAddress();
+            while (instruction != null && instruction.getAddress().getOffset() <= endAddr.getOffset()) {
+                this.instructions.add(new GetBasicBlocks.ResultInstruction(instruction));
+                instruction = getInstructionAfter(instruction);
+            }
+            for (GetBasicBlocks.ResultInstruction instr: this.instructions) 
+                this.instr_jsons.add(instr.toJson());
+
         }
 
         String toJson() {
@@ -178,9 +216,115 @@ public class GetBasicBlocks extends HeadlessScript {
                         String.join(",", source_vaddrs)
                         ) + 
                 String.format(
-                        "\"instr_mode\":\"%s\"",
+                        "\"instr_mode\":\"%s\",",
                         instruction_mode
                         ) + 
+                String.format(
+                        "\"instructions\":[%s]",
+                        String.join(", ", this.instr_jsons)
+                        ) + 
+                "}";
+        }
+    }
+
+    class ResultInstruction {
+        final long instr_offset;
+        final long instr_size;
+        final String mnem;
+        final String operands;
+        final String registers_written;
+        final String registers_read;
+        final String results;
+        final Object[] results_objects;
+        final String instruction_str;
+
+        ResultInstruction(Instruction instruction) {
+            StringBuilder ops = new StringBuilder();
+            StringBuilder regs_read = new StringBuilder();
+            StringBuilder regs_written = new StringBuilder();
+            StringBuilder res = new StringBuilder();
+
+            this.instruction_str = instruction.toString();
+
+            this.results_objects = instruction.getResultObjects();
+            this.instr_offset = instruction.getAddress().getOffset();
+            this.instr_size = instruction.getLength();
+            this.mnem = instruction.getMnemonicString();
+
+            for (int i = 0; i < instruction.getNumOperands(); i++) {
+                ops.append(instruction.getDefaultOperandRepresentation​(i));
+                if (i != instruction.getNumOperands() - 1) {
+                    ops.append(",");
+                }
+                if (instruction.getOperandRefType(i) == RefType.READ) {
+                    regs_read.append(instruction.getOpObjects(i)[instruction.getOpObjects(i).length-1].toString());
+                    if (i != instruction.getNumOperands() - 1) {
+                        regs_read.append(",");
+                    }
+                }
+                if (instruction.getOperandRefType(i) == RefType.WRITE) {
+                    regs_written.append(instruction.getOpObjects(i)[instruction.getOpObjects(i).length-1].toString());
+                     if (i != instruction.getNumOperands() - 1) {
+                        regs_written.append(",");
+                    }
+                }
+                if (instruction.getOperandRefType(i) == RefType.READ_WRITE) {
+                    regs_read.append(instruction.getOpObjects(i)[instruction.getOpObjects(i).length-1].toString());
+                    regs_written.append(instruction.getOpObjects(i)[instruction.getOpObjects(i).length-1].toString());
+                    if (i != instruction.getNumOperands() - 1) {
+                        regs_read.append(",");
+                        regs_written.append(",");
+                    }
+                }
+            }
+            for (int i = 0; i < results_objects.length; i++) {
+                res.append(results_objects[i]);
+                if (i != results_objects.length - 1) {
+                    res.append(",");
+                }
+            }
+
+            this.operands = ops.toString();
+            this.registers_read = regs_read.toString();
+            this.registers_written = regs_written.toString();
+            this.results = res.toString();
+        }
+
+        String toJson() {
+            return 
+                "{" + 
+                String.format(
+                        "\"instr_offset\":%s,",
+                        Long.toUnsignedString(instr_offset) 
+                        ) +
+                String.format(
+                        "\"instr_size\":%s,",
+                        Long.toUnsignedString(instr_size) 
+                        ) +
+                String.format(
+                        "\"mnem\":\"%s\",",
+                        mnem 
+                        ) +
+                String.format(
+                        "\"operands\":\"%s\",",
+                        operands 
+                        ) +
+                String.format(
+                        "\"regs_read\":\"%s\",",
+                        registers_read 
+                        ) +
+                String.format(
+                        "\"regs_written\":\"%s\",",
+                        registers_written
+                        ) +
+                String.format(
+                        "\"results\":\"%s\",",
+                        results
+                        ) +
+                String.format(
+                        "\"instruction_str\":\"%s\"",
+                        instruction_str
+                        ) +
                 "}";
         }
     }

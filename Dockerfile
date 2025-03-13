@@ -38,42 +38,32 @@ RUN mkdir /ghidra/projects/
 
 RUN du -sh /ghidra
 
-COPY ghidra_scripts/DecompileHeadless.java /ghidra/Ghidra/Features/Decompiler/ghidra_scripts/
 COPY ghidra_scripts/ /ghidra_scripts/
-#COPY loggings.tgz /ghidra/support/
 
 
 # Disable illegal reflective access warnings to just produce decompiled code
 
 RUN apt-get update && apt-get install -y sudo libxml2-utils vim \
     && echo "===> Clean up unnecessary files..." \
-    && apt-get clean 
-    #&& apt-get clean \
-    #&& rm -rf /var/lib/apt/lists/* /var/cache/apt/archives /tmp/* /var/tmp/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives /tmp/* /var/tmp/*
 
 RUN sed -i '/VMARG_LIST+="-XX:CICompilerCount=2 "/a VMARG_LIST+="--add-opens java.base/java.lang=ALL-UNNAMED"' /ghidra/support/analyzeHeadless
 
-#RUN tar -C /ghidra/support -zxvf /ghidra/support/loggings.tgz  
 
 RUN groupadd -g ${guest_gid} ${guest_name} \
     && useradd --no-log-init -m -s /bin/bash -g ${guest_name} -G sudo -p '' -u ${guest_uid} ${guest_name}
 
 
-COPY ghidra_decompiler.sh /ghidra
-COPY run.sh /ghidra
-RUN chmod +x /ghidra/ghidra_decompiler.sh
-RUN chmod +x /ghidra/run.sh
+COPY _run.sh /ghidra
+RUN chmod +x /ghidra/_run.sh
 
 RUN chown -R ${guest_name}:${guest_name} /ghidra
 
 USER ${guest_name}
-WORKDIR /home/${guest_name}/
 
 # Define ghidra location for script, it is expecting $GHIDRA_HOME variable
 ENV GHIDRA_HOME=/ghidra
+WORKDIR /ghidra
 
-# meta.json should be kept as final modification for layers
-#ENTRYPOINT ["/ghidra/ghidra_decompiler.sh" ]
-#CMD ["--help"]
-
-ENTRYPOINT ["/ghidra/run.sh" ]
+ENTRYPOINT ["/ghidra/_run.sh" ]

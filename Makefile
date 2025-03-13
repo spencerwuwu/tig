@@ -6,19 +6,11 @@ GID=$(shell id -g)
 IMAGE_NAME=ghidra-$(UNAME)
 CONTAINER_NAME=ghidra-$(UNAME)-container
 
-.PHONY: build run clean shell
+.PHONY: build shell
 
 build:
-	docker build -t ghidra-$(UNAME) --build-arg guest_uid=$(UID) --build-arg guest_gid=$(GID) --build-arg guest_name=$(UNAME) .
+	docker build -t $(IMAGE_NAME) --build-arg guest_uid=$(UID) --build-arg guest_gid=$(GID) --build-arg guest_name=$(UNAME) .
 
-#run:
-#	docker run --rm -it --name $(CONTAINER_NAME) -v $(PWD)/:/docker_shared $(IMAGE_NAME)
-
-clean:
-	docker rm -f $(CONTAINER_NAME)
-	docker rmi $(IMAGE_NAME)
-
-# Open a shell in an already running container
 shell:
-	docker exec -it $(CONTAINER_NAME) bash
+	docker run -it --rm --entrypoint="" $(IMAGE_NAME) bash
 
