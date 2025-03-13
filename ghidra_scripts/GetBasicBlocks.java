@@ -176,11 +176,12 @@ public class GetBasicBlocks extends HeadlessScript {
             this.instructions = new ArrayList<>();
             this.instr_jsons = new ArrayList<>();
             
-            Instruction instruction = getInstructionAt(functionStart);
-            if (instruction == null) {
-                instruction = getInstructionAfter(functionStart);
-            }
+            Address startAddr = addressRange.getMinAddress();
             Address endAddr = addressRange.getMaxAddress();
+            Instruction instruction = getInstructionAt(startAddr);
+            if (instruction == null) {
+                instruction = getInstructionAfter(startAddr);
+            }
             while (instruction != null && instruction.getAddress().getOffset() < endAddr.getOffset()) {
                 this.instructions.add(new GetBasicBlocks.ResultInstruction(instruction));
                 instruction = getInstructionAfter(instruction);
@@ -188,7 +189,6 @@ public class GetBasicBlocks extends HeadlessScript {
             }
             for (GetBasicBlocks.ResultInstruction instr: this.instructions) 
                 this.instr_jsons.add(instr.toJson());
-            System.out.println("");
 
         }
 
