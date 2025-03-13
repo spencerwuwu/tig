@@ -14,6 +14,8 @@ import ghidra.program.model.listing.*;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.mem.MemoryBlockSourceInfo;
+import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.mem.MemBuffer;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
@@ -237,6 +239,8 @@ public class GetBasicBlocks extends HeadlessScript {
         final String results;
         final Object[] results_objects;
         final String instruction_str;
+        final String instruction_byte;
+        final boolean is_big_endian;
 
         ResultInstruction(Instruction instruction) {
             StringBuilder ops = new StringBuilder();
@@ -288,6 +292,19 @@ public class GetBasicBlocks extends HeadlessScript {
             this.registers_read = regs_read.toString();
             this.registers_written = regs_written.toString();
             this.results = res.toString();
+
+            String binary = "";
+            MemBuffer membuf = instruction.getInstructionContext().getMemBuffer();
+            try {
+                byte b = membuf.getByte(0);
+                for (int i = 0; i < instruction.getLength(); i++) {
+                    binary += String.format("%02X", membuf.getByte(i));
+                }
+            } catch(MemoryAccessException e) {
+                println("MemoryAccessException" + e.toString());
+            }
+            this.instruction_byte = binary;
+            this.is_big_endian = membuf.isBigEndian();
         }
 
         String toJson() {
@@ -322,8 +339,16 @@ public class GetBasicBlocks extends HeadlessScript {
                         results
                         ) +
                 String.format(
-                        "\"instruction_str\":\"%s\"",
+                        "\"instruction_str\":\"%s\",",
                         instruction_str
+                        ) +
+                String.format(
+                        "\"instruction_byte\":\"%s\",",
+                        instruction_byte
+                        ) +
+                String.format(
+                        "\"is_big_endian\":\"%b\"",
+                        is_big_endian
                         ) +
                 "}";
         }

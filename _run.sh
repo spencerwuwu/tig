@@ -19,10 +19,10 @@ set +e
     -scriptPath "/ghidra_scripts" \
     -import $binary &> /tmp/log
 
- if [ -f "GetBasicBlocks_result.json" ]; then
-     cat "GetBasicBlocks_result.json"
- else
-     echo "++ ERROR:"
-     cat /tmp/log
-     exit 1
- fi
+if [ -f "GetBasicBlocks_result.json" ]; then
+    cat "GetBasicBlocks_result.json"
+else
+    echo "++ ERROR:"
+    cat /tmp/log
+    exit 1
+fi

@@ -2,7 +2,7 @@
 
 ## Usage
 
-1. Build the Docker image. This will create an image with your user id and name.
+1. Build the Docker image (`ghidra-bbextract`). 
 ```bash
 make build  
 ```
@@ -12,6 +12,9 @@ make build
 ./get_ghidra_basicblocks.sh <binary> <out_json>
 ```
 For example, `example/example.json` is created with ```./get_ghidra_basicblocks.sh example/example.clang.0.o example/example.json```
+
+
+3. Quickview the extracted json file with `parse_result_json.py`
 
 ## Json format
 ```
@@ -30,14 +33,16 @@ For example, `example/example.json` is created with ```./get_ghidra_basicblocks.
                 "instr_mode": (boolean)         # Thumb mode? vle mode? Or `none`
                 "instructions": [
                     {
-                        "instr_offset": (long), # instruction address
-                        "instr_size": (long),   # length of the instruction
-                        "mnem": (str),          # get the mnemonic for this code unit, e.g., MOV, JMP
-                        "operands": (str),      # maybe more than 1, seperated with ,
-                        "regs_read": (str),     # ..
-                        "regs_written": (str),  # ..
-                        "results": (str),       # registers/addresses affected by this instruction
-                        "instruction_str": (str)
+                        "instr_offset": (long),    # instruction address
+                        "instr_size": (long),      # length of the instruction
+                        "mnem": (str),             # get the mnemonic for this code unit, e.g., MOV, JMP
+                        "operands": (str),         # maybe more than 1, seperated with ,
+                        "regs_read": (str),        # ..
+                        "regs_written": (str),     # ..
+                        "results": (str),          # registers/addresses affected by this instruction
+                        "instruction_str": (str),
+                        "instruction_byte": (str), # instruction byte string
+                        "is_big_endian": (boolean)
                     }, ...
                 ]
             }, ...
