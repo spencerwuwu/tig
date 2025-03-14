@@ -27,7 +27,7 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
 	if mnem in ["srli", "slli", "srai"]:
 		return f"3 + args[2] / 4 + args[2] mod 4"
 	if mnem in ["lb", "lh", "lw", "lbu", "lhu", "sb", "sh", "sw"]:
-		return "5 + ({ML} - 2)"
+		return f"5 + ({ML} - 2)"
 	if mnem in ["beq", "bne", "blt", "bge", "bltu", "bgeu"]:
 		op1 = '0' if args[0] == 'zero' else f"{store_name} {args[0]}"
 		op2 = '0' if args[1] == 'zero' else f"{store_name} {args[1]}"
@@ -70,7 +70,6 @@ def print_bb(results, function_name=""):
             print(preblock)
             block_addr = block["bb_start_vaddr"] - GHIDRA_ADDR_OFFSET
             for instr in block["instructions"]:
-                instr["operands"] = instr["operands"].split(",")
                 byte_instr = instr["instruction_byte"]
                 str_instr = instr["instruction_str"]
                 addr = instr["instr_offset"] - GHIDRA_ADDR_OFFSET
@@ -81,10 +80,27 @@ def print_bb(results, function_name=""):
                 problock += "(exit)"
             print(problock)
 
+            print(time_of_basic_block(block))
+
             print()
         print()
 
+def time_of_basic_block(block):
+	times = ['(' + time_of_riscv_instr(instr['mnem'], instr['operands'], 's', 'ML') + ')' for instr in block['instructions']]
+	return f"{' + '.join(times)}"
 
+def preprocess_data(results, function_name):
+	for i in range(len(results)):
+		if results[i]['function_name'] == function_name:
+			break
+
+	blocks = results[i]["blocks"]
+	
+	for block in blocks:
+		for instr in block["instructions"]:
+			instr["operands"] = instr["operands"].split(",")
+	
+	results[i]["blocks"] = blocks
 
 if __name__ ==  "__main__":
 	parser = argparse.ArgumentParser('time_of_riscv_function.py', description='pretty print parsed json file')
@@ -103,4 +119,6 @@ if __name__ ==  "__main__":
 	else:
 		with open(preproc_fn, "r") as file:
 			data = json.load(file)
+
+	preprocess_data(data, args.function_name)
 	print_bb(data, args.function_name)
