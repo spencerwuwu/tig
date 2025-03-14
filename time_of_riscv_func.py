@@ -49,7 +49,7 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
 		return f"5 + ({ML} - 1)"
 
 	# TODO : last few else ifs in Rocq RISCV timing function
-	return f"(ERROR: {mnem} {args})"
+	return f"(* ERROR: {mnem} {args} *) 99"
 	
 
 def print_bb(results, function_name=""):
@@ -73,7 +73,7 @@ def print_bb(results, function_name=""):
                 byte_instr = instr["instruction_byte"]
                 str_instr = instr["instruction_str"]
                 addr = instr["instr_offset"] - GHIDRA_ADDR_OFFSET
-                print(f"{addr:7x}:   {byte_instr:20s} {str_instr} - {time_of_riscv_instr(instr['mnem'], instr['operands'], 's', 'ML')}")
+                print(f"{addr:7x}:   {byte_instr:20s} {str_instr}") # - {time_of_riscv_instr(instr['mnem'], instr['operands'], 's', 'ML')}")
 
             problock = "    > Dst: " + ", ".join(f"{addr-GHIDRA_ADDR_OFFSET:x}" for addr in block["exit_vaddrs"])
             if block["is_exit_point"]:
@@ -88,6 +88,16 @@ def print_bb(results, function_name=""):
 def time_of_basic_block(block):
 	times = ['(' + time_of_riscv_instr(instr['mnem'], instr['operands'], 's', 'ML') + ')' for instr in block['instructions']]
 	return f"{' + '.join(times)}"
+
+def time_of_function_basic_blocks(results, function_name):
+	func = [x for x in results if x["function_name"] == function_name][0]
+	out = f"Definition basic_block_times_{function_name} (s : store) (ML : nat) (addr : N) : option nat :=\n"
+	out += "  let err_time := 999 in\n"
+	out += "  match addr with\n"
+	for block in func["blocks"]:
+		out += f"  | {block['instructions'][-1]['instr_offset'] - GHIDRA_ADDR_OFFSET} => {time_of_basic_block(block)}\n"
+	out += "  end.\n\n"
+	return out
 
 def preprocess_data(results, function_name):
 	for i in range(len(results)):
@@ -121,4 +131,5 @@ if __name__ ==  "__main__":
 			data = json.load(file)
 
 	preprocess_data(data, args.function_name)
-	print_bb(data, args.function_name)
+	#print_bb(data, args.function_name)
+	print(time_of_function_basic_blocks(data, args.function_name))
