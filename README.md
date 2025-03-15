@@ -1,4 +1,10 @@
-# Ghidra Headless Basic Block Exactor
+# Ghidra Headless Basic Block Extractor
+
+## Dependencies
+1. Docker (for hosting headless **Ghidra**)
+2. llvm (for **llvm-objdump**)
+3. capstone >= 5.0.0 (install through pip)
+
 
 ## Usage
 
@@ -7,14 +13,26 @@
 make build  
 ```
 
-2. Collect basic blocks information and store in json file
+2. Collect basic blocks information from **Ghidra** and store in json file
 ```bash
 ./get_ghidra_basicblocks.sh <binary> <out_json>
 ```
-For example, `example/example.json` is created with ```./get_ghidra_basicblocks.sh example/example.clang.0.o example/example.json```
+For example, `example/example.json` is created with `./get_ghidra_basicblocks.sh example/example.clang.0.o example/example.json`
 
+3. Get different dissamble results from **llvm-objdump** and **capstone** with the json file generated from Ghidra.   
+  This updates each instruction's `mnem`, `operands`, `instruction_str` and store to a new json file.   
+  Note that for **llvm-objdump**, I group all instructions not matched with **Ghidra** into a psedu function block `_OBJDUMP_ORPHANS`.   
+```bash
+# Collect dissambly from llvm-objdump for the same basic blocks
+./llvm-objdump_pass.py <binary> <input_json> <output_json>
 
-3. Quickview the extracted json file with `parse_result_json.py`
+# Collect dissambly from capstone for the same basic blocks
+./capstone_pass.py <arch> <input_json> <output_json>
+```
+
+4. Quickview the extracted json file with `parse_result_json.py`.   
+  I use this to generate files in `disassembly_diff/` to compare the results of differentt dissamblers.
+
 
 ## Json format
 ```
@@ -29,7 +47,7 @@ For example, `example/example.json` is created with ```./get_ghidra_basicblocks.
                 "exit_vaddrs": [(long), ...],   # addresses of the successor blocks
                 "is_entry_point": (boolean),    # start of function?
                 "source_vaddrs": [(long), ...], # addresses of the predecessor blocks
-                "instr_mode": (boolean)         # Thumb mode? vle mode? Or `none`
+                "instr_mode": (str)         # Thumb mode? vle mode? Or `none`
                 "instructions": [
                     {
                         "instr_offset": (long),    # instruction address
