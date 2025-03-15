@@ -19,12 +19,13 @@ make build
 ```
 For example, `example/example.json` is created with `./get_ghidra_basicblocks.sh example/example.clang.0.o example/example.json`
 
-3. Get different dissamble results from **llvm-objdump** and **capstone** with the json file generated from Ghidra.   
+3. Get different dissamble results from **objdump** and **capstone** with the json file generated from Ghidra.   
   This updates each instruction's `mnem`, `operands`, `instruction_str` and store to a new json file.   
-  Note that for **llvm-objdump**, I group all instructions not matched with **Ghidra** into a psedu function block `_OBJDUMP_ORPHANS`.   
+  Note that for **objdump**, I group all instructions not matched with **Ghidra** into a psedu function block `_OBJDUMP_ORPHANS`.   
 ```bash
-# Collect dissambly from llvm-objdump for the same basic blocks
-./llvm-objdump_pass.py <binary> <input_json> <output_json>
+# Collect dissambly from objdump for the same basic blocks
+# OBJ_BIN: riscv64-linux-gnu-objdump, llvm-objdump (default)
+./llvm-objdump_pass.py [--objdump OBJ_BIN] <binary> <input_json> <output_json>
 
 # Collect dissambly from capstone for the same basic blocks
 ./capstone_pass.py <arch> <input_json> <output_json>

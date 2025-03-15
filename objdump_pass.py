@@ -6,14 +6,15 @@ import re
 import os
 
 
-def get_objdump_results(binary, offset=0):
-    cmd = f"llvm-objdump -d -M no-aliases {binary}"
+def get_objdump_results(binary, obj_bin="llvm-objdump", offset=0):
+    cmd = f"{obj_bin} -d -M no-aliases {binary}"
     print(f"Executing `{cmd}`")
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     if p.returncode != 0:
         print(err.decode())
-        cmd = f"llvm-objdump -d --adjust-vma={offset} {binary}"
+        # NOTE / TODO: assume is x86, adjust offset
+        cmd = f"{obj_bin} -d --adjust-vma={offset} {binary}"
         print(f"Executing `{cmd}`")
         p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
@@ -22,7 +23,7 @@ def get_objdump_results(binary, offset=0):
             exit(1)
     disassembly = {}
     for line in out.decode().splitlines():
-        if not re.match(r"^\s*[0-9a-f]+: ", line):
+        if not re.match(r"^\s*[0-9a-f]+:\s", line):
             continue
         address, rest = line.split(":", 1)
         address = int(address, 16)
@@ -38,10 +39,10 @@ def get_objdump_results(binary, offset=0):
                     }
             continue
         mnem, op_str = instr.split("\t")
-        op_str = op_str.strip()
+        op_str = op_str.strip().replace(", ", ",")
         mnem = mnem.strip()
         instr = f"{mnem} {op_str}".strip()
-        op_str = re.sub(r"<[\w_+-]+>", "", op_str).replace(" ", "").strip()
+        op_str = re.sub(r"<[\w_+-]+>", "", op_str).strip()
         disassembly[address] = {
                 "mnem": mnem,
                 "operands": op_str,
@@ -53,7 +54,8 @@ def get_objdump_results(binary, offset=0):
 
 
 if __name__ ==  "__main__":
-    parser = argparse.ArgumentParser('llvm-objdump_pass.py', description='add llvm-objdump disassembly')
+    parser = argparse.ArgumentParser('objdump_pass.py', description='add objdump disassembly')
+    parser.add_argument("--objdump", dest="obj_bin", default="llvm-objdump")
     parser.add_argument("binary")
     parser.add_argument("input_json")
     parser.add_argument("output_json")
@@ -70,7 +72,7 @@ if __name__ ==  "__main__":
         orig_data = json.load(fd)
 
     offset = orig_data[0]['blocks'][0]['bb_start_vaddr']
-    objdump_results = get_objdump_results(args.binary, offset)
+    objdump_results = get_objdump_results(args.binary, args.obj_bin, offset)
 
 
     instr_cnt = 0
