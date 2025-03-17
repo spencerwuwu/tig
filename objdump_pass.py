@@ -52,7 +52,8 @@ def get_objdump_results(binary, obj_bin="llvm-objdump", offset=0):
             continue
         address, rest = line.split(":", 1)
         address = int(address, 16)
-        byte_string, instr = re.split(r"\s{2,}", rest)
+        rest = rest.split("#")[0]
+        byte_string, instr = re.split(r"\s{2,}", rest, 1)
         byte_string = byte_string.replace(" ", "")
         if "\t" not in instr:
             #disassembly[address] = {
