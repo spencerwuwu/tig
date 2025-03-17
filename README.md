@@ -1,5 +1,13 @@
 # Ghidra Headless Basic Block Extractor
 
+## Issues
+1. In *RTODemo.elf* `0x80001aa6` (a switch case in `tasks.c:xTaskGenericNotify`
+   [link to source code](https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/64fd9291ef668d0f3695771f0ce596d5e6c75802/tasks.c#L7907) ),
+  Ghidra can dissable the instructions, but not connecting blocks correctly on CFG.   
+  This results in no show when iterating through the function with the current approach.
+
+
+
 ## Dependencies
 1. Docker (for hosting headless **Ghidra**)
 2. llvm (for **llvm-objdump**)

@@ -47,12 +47,12 @@
     > Dst: 80000066
 
     > Src: 80000066, 8000005c
-80000066:   73005010                                      	( ; )
+80000066:   73005010             wfi                      	(wfi ; )
 8000006a:   F5BF                 c.j 80000066 <_start+0x66>	(c.j ; 80000066)
     > Dst: (exit)
 
     > Src: 80000000, 8000006c
-8000006c:   73005010                                      	( ; )
+8000006c:   73005010             wfi                      	(wfi ; )
 80000070:   F5BF                 c.j 8000006c <secondary> 	(c.j ; 8000006c)
     > Dst: (exit)
 
@@ -232,7 +232,7 @@
     > Dst: 800001ca, 800001c6
 
     > Src: 800001ba
-800001c6:   73000000                                      	( ; )
+800001c6:   73000000             ecall                    	(ecall ; )
     > Dst: 800001ca
 
     > Src: 800001b4, 800001ba, 800001c6
@@ -977,7 +977,7 @@
     > Dst: 800006a4
 
     > Src: 8000068c, 80000692
-800006a4:   73000000                                      	( ; )
+800006a4:   73000000             ecall                    	(ecall ; )
     > Dst: 800006a8
 
     > Src: 8000067e, 80000684, 800006a4
@@ -1269,7 +1269,7 @@
     > Dst: 8000086a, 80000866
 
     > Src: 80000864
-80000866:   73000000                                      	( ; )
+80000866:   73000000             ecall                    	(ecall ; )
     > Dst: 8000086a
 
     > Src: 800007c0, 80000864, 80000866
@@ -1373,7 +1373,7 @@
     > Dst: 8000092a, 80000926
 
     > Src: 800008dc
-80000926:   73000000                                      	( ; )
+80000926:   73000000             ecall                    	(ecall ; )
     > Dst: 8000092a
 
     > Src: 800008c4, 800008dc, 80000926
@@ -1899,7 +1899,7 @@
 
     > Src: 80000c8a
 80000c92:   83A78189             lw a5,-1896(gp) # 80080098 <pxCurrentTCB>	(lw ; a5,-1896(gp) # 80080098)
-80000c96:   73000000                                      	( ; )
+80000c96:   73000000             ecall                    	(ecall ; )
 80000c9a:   0545                 c.li a0,1                	(c.li ; a0,1)
 80000c9c:   09BF                 c.j 80000bae <xTaskResumeAll+0x4a>	(c.j ; 80000bae)
     > Dst: (exit)
@@ -1975,7 +1975,7 @@
     > Dst: 80000d12, 80000d0e
 
     > Src: 80000d0a
-80000d0e:   73000000                                      	( ; )
+80000d0e:   73000000             ecall                    	(ecall ; )
     > Dst: 80000d12
 
     > Src: 80000d0a, 80000d0e
@@ -2012,7 +2012,7 @@
     > Dst: 80000d3e, 80000d38
 
     > Src: 80000d36
-80000d38:   73000000                                      	( ; )
+80000d38:   73000000             ecall                    	(ecall ; )
 80000d3c:   8280                 c.jr ra                  	(c.jr ; ra)
     > Dst: (exit)
 
@@ -2044,7 +2044,7 @@
     > Dst: 80000d74, 80000d70
 
     > Src: 80000d64
-80000d70:   73000000                                      	( ; )
+80000d70:   73000000             ecall                    	(ecall ; )
     > Dst: 80000d74
 
     > Src: 80000d64, 80000d70
@@ -2540,7 +2540,7 @@
     > Dst: 800010d2
 
     > Src: 800010ba, 800010c0
-800010d2:   73000000                                      	( ; )
+800010d2:   73000000             ecall                    	(ecall ; )
     > Dst: 800010d6
 
     > Src: 800010ac, 800010f8, 800010d2
@@ -3635,7 +3635,7 @@
     > Dst: 800017f6, 800017f2
 
     > Src: 800017f0
-800017f2:   73000000                                      	( ; )
+800017f2:   73000000             ecall                    	(ecall ; )
     > Dst: 800017f6
 
     > Src: 800017e8, 800017f0, 800017f2
@@ -3778,7 +3778,7 @@
     > Dst: 800018f4, 800018f0
 
     > Src: 800018ee
-800018f0:   73000000                                      	( ; )
+800018f0:   73000000             ecall                    	(ecall ; )
     > Dst: 800018f4
 
     > Src: 800018e6, 800018ee, 800018f0
@@ -3982,7 +3982,7 @@
     > Dst: 80001a82, 80001a7e
 
     > Src: 80001a72
-80001a7e:   73000000                                      	( ; )
+80001a7e:   73000000             ecall                    	(ecall ; )
     > Dst: 80001a82
 
     > Src: 80001a08, 80001a72, 80001a7e
@@ -5054,7 +5054,7 @@
     > Dst: 80002158, 80002154
 
     > Src: 8000214c
-80002154:   73000000                                      	( ; )
+80002154:   73000000             ecall                    	(ecall ; )
     > Dst: 80002158
 
     > Src: 80002148, 8000214c, 80002174, 80002154
@@ -5588,7 +5588,7 @@
     > Dst: 80002456, 80002452
 
     > Src: 80002450
-80002452:   73000000                                      	( ; )
+80002452:   73000000             ecall                    	(ecall ; )
     > Dst: 80002456
 
     > Src: 80002446, 80002450, 80002452
@@ -5706,7 +5706,7 @@
     > Dst: 800024fe, 800024fa
 
     > Src: 800024e6
-800024fa:   73000000                                      	( ; )
+800024fa:   73000000             ecall                    	(ecall ; )
     > Dst: 800024fe
 
     > Src: 800024e6, 80002502, 800024fa
@@ -6245,7 +6245,7 @@
     > Dst: 80002832, 8000282e
 
     > Src: 80002824
-8000282e:   73000000                                      	( ; )
+8000282e:   73000000             ecall                    	(ecall ; )
     > Dst: 80002832
 
     > Src: 80002812, 80002824, 8000282e
@@ -6371,7 +6371,7 @@
     > Dst: 800028dc, 800028d8
 
     > Src: 800028c4
-800028d8:   73000000                                      	( ; )
+800028d8:   73000000             ecall                    	(ecall ; )
     > Dst: 800028dc
 
     > Src: 800028c4, 800028e0, 800028ec, 800028d8
@@ -6491,7 +6491,7 @@
     > Dst: 80002994, 80002990
 
     > Src: 80002986
-80002990:   73000000                                      	( ; )
+80002990:   73000000             ecall                    	(ecall ; )
     > Dst: 80002994
 
     > Src: 80002982, 80002986, 80002990
@@ -6635,7 +6635,7 @@
     > Dst: 80002a64, 80002a60
 
     > Src: 80002a4c
-80002a60:   73000000                                      	( ; )
+80002a60:   73000000             ecall                    	(ecall ; )
     > Dst: 80002a64
 
     > Src: 80002a4c, 80002a68, 80002a74, 80002a60
@@ -6838,7 +6838,7 @@
     > Dst: 80002baa, 80002ba6
 
     > Src: 80002b9c
-80002ba6:   73000000                                      	( ; )
+80002ba6:   73000000             ecall                    	(ecall ; )
     > Dst: 80002baa
 
     > Src: 80002b88, 80002b9c, 80002ba6
@@ -6963,7 +6963,7 @@
     > Dst: 80002c52, 80002c4e
 
     > Src: 80002c3a
-80002c4e:   73000000                                      	( ; )
+80002c4e:   73000000             ecall                    	(ecall ; )
     > Dst: 80002c52
 
     > Src: 80002c3a, 80002c56, 80002c62, 80002c4e
@@ -7909,7 +7909,7 @@
     > Dst: 800031a6
 
     > Src: 80003194
-800031a6:   73000000                                      	( ; )
+800031a6:   73000000             ecall                    	(ecall ; )
 800031aa:   79BF                 c.j 80003148 <prvTimerTask+0x56>	(c.j ; 80003148)
     > Dst: (exit)
 
@@ -8802,7 +8802,7 @@
     > Dst: 800037e4, 800037e0
 
     > Src: 800037de
-800037e0:   73000000                                      	( ; )
+800037e0:   73000000             ecall                    	(ecall ; )
     > Dst: 800037e4
 
     > Src: 800037de, 800037e0
@@ -9130,7 +9130,7 @@
     > Dst: 800039f8, 800039f4
 
     > Src: 800039f2
-800039f4:   73000000                                      	( ; )
+800039f4:   73000000             ecall                    	(ecall ; )
     > Dst: 800039f8
 
     > Src: 800039f2, 800039f4
@@ -21740,7 +21740,7 @@
     > Dst: 800091a2
 
     > Src: 8000919e
-800091a2:   73000000                                      	( ; )
+800091a2:   73000000             ecall                    	(ecall ; )
 800091a6:   69B7                 c.j 80009130 <prvSemaphoreTest+0x60>	(c.j ; 80009130)
     > Dst: (exit)
 
@@ -32213,7 +32213,7 @@
 8000df3e:   365F                 c.lwsp t5,108(sp)        	(c.lwsp ; t5,108(sp))
 8000df40:   C65F                 c.lwsp t6,112(sp)        	(c.lwsp ; t6,112(sp))
 8000df42:   1301C107             addi sp,sp,124           	(addi ; sp,sp,124)
-8000df46:   73002030                                      	( ; )
+8000df46:   73002030             mret                     	(mret ; )
     > Dst: (exit)
 
     > Src: 8000de7a
@@ -32257,7 +32257,7 @@
 8000dfa4:   365F                 c.lwsp t5,108(sp)        	(c.lwsp ; t5,108(sp))
 8000dfa6:   C65F                 c.lwsp t6,112(sp)        	(c.lwsp ; t6,112(sp))
 8000dfa8:   1301C107             addi sp,sp,124           	(addi ; sp,sp,124)
-8000dfac:   73002030                                      	( ; )
+8000dfac:   73002030             mret                     	(mret ; )
     > Dst: (exit)
 
 
@@ -32343,7 +32343,7 @@
 8000e06c:   365F                 c.lwsp t5,108(sp)        	(c.lwsp ; t5,108(sp))
 8000e06e:   C65F                 c.lwsp t6,112(sp)        	(c.lwsp ; t6,112(sp))
 8000e070:   1301C107             addi sp,sp,124           	(addi ; sp,sp,124)
-8000e074:   73002030                                      	( ; )
+8000e074:   73002030             mret                     	(mret ; )
     > Dst: (exit)
 
 
@@ -32451,7 +32451,7 @@
 8000e164:   365F                 c.lwsp t5,108(sp)        	(c.lwsp ; t5,108(sp))
 8000e166:   C65F                 c.lwsp t6,112(sp)        	(c.lwsp ; t6,112(sp))
 8000e168:   1301C107             addi sp,sp,124           	(addi ; sp,sp,124)
-8000e16c:   73002030                                      	( ; )
+8000e16c:   73002030             mret                     	(mret ; )
     > Dst: (exit)
 
 
@@ -32624,7 +32624,7 @@
 8000e24a:   0507                 c.addi a4,1              	(c.addi ; a4,1)
 8000e24c:   98C3                 c.sw a4,0(a5)            	(c.sw ; a4,0(a5))
 8000e24e:   3947                 c.li a4,14               	(c.li ; a4,14)
-8000e250:   73000000                                      	( ; )
+8000e250:   73000000             ecall                    	(ecall ; )
 8000e254:   813F                 c.jal 8000e1a4 <reg1_loop>	(c.jal ; 8000e1a4)
     > Dst: (exit)
 
@@ -33451,109 +33451,117 @@
 
 -000000001  <_OBJDUMP_ORPHANS>:
     > Src: (entry)
-800019fc:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
-800019fe:   	9426                c.add s0,s1              	(c.add ; s0,s1)
-80001a00:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
-80001a02:   	0147e7b3            or a5,a5,s4              	(or ; a5,a5,s4)
-80001a06:   	c83c                c.sw a5,80(s0)           	(c.sw ; a5,80(s0))
-80001aa6:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
-80001aa8:   	9426                c.add s0,s1              	(c.add ; s0,s1)
-80001aaa:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
-80001aac:   	0785                c.addi a5,1              	(c.addi ; a5,1)
-80001aae:   	bfa1                c.j 80001a06 <xTaskGenericNotify+0x9e>	(c.j ; 80001a06)
-80001ab0:   	4789                c.li a5,2                	(c.li ; a5,2)
-80001ab2:   	4501                c.li a0,0                	(c.li ; a0,0)
-80001ab4:   	fcfa88e3            beq s5,a5,80001a84 <xTaskGenericNotify+0x11c>	(beq ; s5,a5,80001a84)
-80001ab8:   	0451                c.addi s0,20             	(c.addi ; s0,20)
-80001aba:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
-80001abc:   	9426                c.add s0,s1              	(c.add ; s0,s1)
-80001abe:   	01442023            sw s4,0(s0)              	(sw ; s4,0(s0))
-80001ac2:   	b799                c.j 80001a08 <xTaskGenericNotify+0xa0>	(c.j ; 80001a08)
-80001b62:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
-80001b64:   	944a                c.add s0,s2              	(c.add ; s0,s2)
-80001b66:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
-80001b68:   	0147e7b3            or a5,a5,s4              	(or ; a5,a5,s4)
-80001b6c:   	c83c                c.sw a5,80(s0)           	(c.sw ; a5,80(s0))
-80001c18:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
-80001c1a:   	944a                c.add s0,s2              	(c.add ; s0,s2)
-80001c1c:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
-80001c1e:   	0785                c.addi a5,1              	(c.addi ; a5,1)
-80001c20:   	b7b1                c.j 80001b6c <xTaskGenericNotifyFromISR+0x8e>	(c.j ; 80001b6c)
-80001c22:   	4789                c.li a5,2                	(c.li ; a5,2)
-80001c24:   	4501                c.li a0,0                	(c.li ; a0,0)
-80001c26:   	fefa80e3            beq s5,a5,80001c06 <xTaskGenericNotifyFromISR+0x128>	(beq ; s5,a5,80001c06)
-80001c2a:   	0451                c.addi s0,20             	(c.addi ; s0,20)
-80001c2c:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
-80001c2e:   	944a                c.add s0,s2              	(c.add ; s0,s2)
-80001c30:   	01442023            sw s4,0(s0)              	(sw ; s4,0(s0))
-80001c34:   	bf2d                c.j 80001b6e <xTaskGenericNotifyFromISR+0x90>	(c.j ; 80001b6e)
-800031ca:   	0017e793            ori a5,a5,1              	(ori ; a5,a5,1)
-800031ce:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
-800031d2:   	4c0c                c.lw a1,24(s0)           	(c.lw ; a1,24(s0))
-800031d4:   	5692                c.lwsp a3,36(sp)         	(c.lwsp ; a3,36(sp))
-800031d6:   	862a                c.mv a2,a0               	(c.mv ; a2,a0)
-800031d8:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
-800031da:   	95b6                c.add a1,a3              	(c.add ; a1,a3)
-800031dc:   	e01ff0ef            jal ra,80002fdc <prvInsertTimerInActiveList>	(jal ; ra,80002fdc)
-800031e0:   	d925                c.beqz a0,80003150 <prvTimerTask+0x5e>	(c.beqz ; a0,80003150)
-800031e2:   	02844783            lbu a5,40(s0)            	(lbu ; a5,40(s0))
-800031e6:   	0047f713            andi a4,a5,4             	(andi ; a4,a5,4)
-800031ea:   	cf01                c.beqz a4,80003202 <prvTimerTask+0x110>	(c.beqz ; a4,80003202)
-800031ec:   	4c1c                c.lw a5,24(s0)           	(c.lw ; a5,24(s0))
-800031ee:   	5592                c.lwsp a1,36(sp)         	(c.lwsp ; a1,36(sp))
-800031f0:   	865a                c.mv a2,s6               	(c.mv ; a2,s6)
-800031f2:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
-800031f4:   	95be                c.add a1,a5              	(c.add ; a1,a5)
-800031f6:   	e27ff0ef            jal ra,8000301c <prvReloadTimer>	(jal ; ra,8000301c)
-800031fa:   	501c                c.lw a5,32(s0)           	(c.lw ; a5,32(s0))
-800031fc:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
-800031fe:   	9782                c.jalr a5                	(c.jalr ; a5)
-80003200:   	bf81                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
-80003202:   	9bf9                c.andi a5,-2             	(c.andi ; a5,-2)
-80003204:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
-80003208:   	bfcd                c.j 800031fa <prvTimerTask+0x108>	(c.j ; 800031fa)
-8000320a:   	0017e793            ori a5,a5,1              	(ori ; a5,a5,1)
-8000320e:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
-80003212:   	5792                c.lwsp a5,36(sp)         	(c.lwsp ; a5,36(sp))
-80003214:   	cc1c                c.sw a5,24(s0)           	(c.sw ; a5,24(s0))
-80003216:   	e799                c.bnez a5,80003224 <prvTimerTask+0x132>	(c.bnez ; a5,80003224)
-80003218:   	41000593            addi a1,zero,1040        	(addi ; a1,zero,1040)
-8000321c:   	a18a8513            addi a0,s5,-1512 # 8000ea18 <_etext+0x48>	(addi ; a0,s5,-1512 # 8000ea18)
-80003220:   	3ee0a0ef            jal ra,8000d60e <vAssertCalled>	(jal ; ra,8000d60e)
-80003224:   	4c0c                c.lw a1,24(s0)           	(c.lw ; a1,24(s0))
-80003226:   	86da                c.mv a3,s6               	(c.mv ; a3,s6)
-80003228:   	865a                c.mv a2,s6               	(c.mv ; a2,s6)
-8000322a:   	95da                c.add a1,s6              	(c.add ; a1,s6)
-8000322c:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
-8000322e:   	dafff0ef            jal ra,80002fdc <prvInsertTimerInActiveList>	(jal ; ra,80002fdc)
-80003232:   	bf39                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
-80003234:   	0027f713            andi a4,a5,2             	(andi ; a4,a5,2)
-80003238:   	e709                c.bnez a4,80003242 <prvTimerTask+0x150>	(c.bnez ; a4,80003242)
-8000323a:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
-8000323c:   	3dc010ef            jal ra,80004618 <vPortFree>	(jal ; ra,80004618)
-80003240:   	bf01                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
-80003242:   	9bf9                c.andi a5,-2             	(c.andi ; a5,-2)
-80003244:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
-80003248:   	b721                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
-8000e264:   	00000013            addi zero,zero,0         	(addi ; zero,zero,0)
-8000e268:   	00000013            addi zero,zero,0         	(addi ; zero,zero,0)
-8000e26c:   	00000013            addi zero,zero,0         	(addi ; zero,zero,0)
-8000e400:   	a7bff06f            jal zero,8000de7a <freertos_risc_v_exception_handler>	(jal ; zero,8000de7a)
-8000e404:   	badff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e408:   	ba9ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e40c:   	ba5ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e410:   	ba1ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e414:   	b9dff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e418:   	b99ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e41c:   	c5dff06f            jal zero,8000e078 <freertos_risc_v_mtimer_interrupt_handler>	(jal ; zero,8000e078)
-8000e420:   	b91ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e424:   	b8dff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e428:   	b89ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e42c:   	b85ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e430:   	b81ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e434:   	b7dff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e438:   	b79ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
-8000e43c:   	b75ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+switch in xTaskGenericNotify
+ - 800019fc:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
+ - 800019fe:   	9426                c.add s0,s1              	(c.add ; s0,s1)
+ - 80001a00:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
+ - 80001a02:   	0147e7b3            or a5,a5,s4              	(or ; a5,a5,s4)
+ - 80001a06:   	c83c                c.sw a5,80(s0)           	(c.sw ; a5,80(s0))
+ - 80001aa6:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
+ - 80001aa8:   	9426                c.add s0,s1              	(c.add ; s0,s1)
+ - 80001aaa:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
+ - 80001aac:   	0785                c.addi a5,1              	(c.addi ; a5,1)
+ - 80001aae:   	bfa1                c.j 80001a06 <xTaskGenericNotify+0x9e>	(c.j ; 80001a06)
+ - 80001ab0:   	4789                c.li a5,2                	(c.li ; a5,2)
+ - 80001ab2:   	4501                c.li a0,0                	(c.li ; a0,0)
+ - 80001ab4:   	fcfa88e3            beq s5,a5,80001a84 <xTaskGenericNotify+0x11c>	(beq ; s5,a5,80001a84)
+ - 80001ab8:   	0451                c.addi s0,20             	(c.addi ; s0,20)
+ - 80001aba:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
+ - 80001abc:   	9426                c.add s0,s1              	(c.add ; s0,s1)
+ - 80001abe:   	01442023            sw s4,0(s0)              	(sw ; s4,0(s0))
+ - 80001ac2:   	b799                c.j 80001a08 <xTaskGenericNotify+0xa0>	(c.j ; 80001a08)
+
+switch from xTaskGenericNotifyFromISR
+ - 80001b62:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
+ - 80001b64:   	944a                c.add s0,s2              	(c.add ; s0,s2)
+ - 80001b66:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
+ - 80001b68:   	0147e7b3            or a5,a5,s4              	(or ; a5,a5,s4)
+ - 80001b6c:   	c83c                c.sw a5,80(s0)           	(c.sw ; a5,80(s0))
+ - 80001c18:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
+ - 80001c1a:   	944a                c.add s0,s2              	(c.add ; s0,s2)
+ - 80001c1c:   	483c                c.lw a5,80(s0)           	(c.lw ; a5,80(s0))
+ - 80001c1e:   	0785                c.addi a5,1              	(c.addi ; a5,1)
+ - 80001c20:   	b7b1                c.j 80001b6c <xTaskGenericNotifyFromISR+0x8e>	(c.j ; 80001b6c)
+ - 80001c22:   	4789                c.li a5,2                	(c.li ; a5,2)
+ - 80001c24:   	4501                c.li a0,0                	(c.li ; a0,0)
+ - 80001c26:   	fefa80e3            beq s5,a5,80001c06 <xTaskGenericNotifyFromISR+0x128>	(beq ; s5,a5,80001c06)
+ - 80001c2a:   	0451                c.addi s0,20             	(c.addi ; s0,20)
+ - 80001c2c:   	040a                c.slli s0,0x2            	(c.slli ; s0,0x2)
+ - 80001c2e:   	944a                c.add s0,s2              	(c.add ; s0,s2)
+ - 80001c30:   	01442023            sw s4,0(s0)              	(sw ; s4,0(s0))
+ - 80001c34:   	bf2d                c.j 80001b6e <xTaskGenericNotifyFromISR+0x90>	(c.j ; 80001b6e)
+
+switch in privTimerTask
+ - 800031ca:   	0017e793            ori a5,a5,1              	(ori ; a5,a5,1)
+ - 800031ce:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
+ - 800031d2:   	4c0c                c.lw a1,24(s0)           	(c.lw ; a1,24(s0))
+ - 800031d4:   	5692                c.lwsp a3,36(sp)         	(c.lwsp ; a3,36(sp))
+ - 800031d6:   	862a                c.mv a2,a0               	(c.mv ; a2,a0)
+ - 800031d8:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
+ - 800031da:   	95b6                c.add a1,a3              	(c.add ; a1,a3)
+ - 800031dc:   	e01ff0ef            jal ra,80002fdc <prvInsertTimerInActiveList>	(jal ; ra,80002fdc)
+ - 800031e0:   	d925                c.beqz a0,80003150 <prvTimerTask+0x5e>	(c.beqz ; a0,80003150)
+ - 800031e2:   	02844783            lbu a5,40(s0)            	(lbu ; a5,40(s0))
+ - 800031e6:   	0047f713            andi a4,a5,4             	(andi ; a4,a5,4)
+ - 800031ea:   	cf01                c.beqz a4,80003202 <prvTimerTask+0x110>	(c.beqz ; a4,80003202)
+ - 800031ec:   	4c1c                c.lw a5,24(s0)           	(c.lw ; a5,24(s0))
+ - 800031ee:   	5592                c.lwsp a1,36(sp)         	(c.lwsp ; a1,36(sp))
+ - 800031f0:   	865a                c.mv a2,s6               	(c.mv ; a2,s6)
+ - 800031f2:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
+ - 800031f4:   	95be                c.add a1,a5              	(c.add ; a1,a5)
+ - 800031f6:   	e27ff0ef            jal ra,8000301c <prvReloadTimer>	(jal ; ra,8000301c)
+ - 800031fa:   	501c                c.lw a5,32(s0)           	(c.lw ; a5,32(s0))
+ - 800031fc:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
+ - 800031fe:   	9782                c.jalr a5                	(c.jalr ; a5)
+ - 80003200:   	bf81                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
+ - 80003202:   	9bf9                c.andi a5,-2             	(c.andi ; a5,-2)
+ - 80003204:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
+ - 80003208:   	bfcd                c.j 800031fa <prvTimerTask+0x108>	(c.j ; 800031fa)
+ - 8000320a:   	0017e793            ori a5,a5,1              	(ori ; a5,a5,1)
+ - 8000320e:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
+ - 80003212:   	5792                c.lwsp a5,36(sp)         	(c.lwsp ; a5,36(sp))
+ - 80003214:   	cc1c                c.sw a5,24(s0)           	(c.sw ; a5,24(s0))
+ - 80003216:   	e799                c.bnez a5,80003224 <prvTimerTask+0x132>	(c.bnez ; a5,80003224)
+ - 80003218:   	41000593            addi a1,zero,1040        	(addi ; a1,zero,1040)
+ - 8000321c:   	a18a8513            addi a0,s5,-1512 # 8000ea18 <_etext+0x48>	(addi ; a0,s5,-1512 # 8000ea18)
+ - 80003220:   	3ee0a0ef            jal ra,8000d60e <vAssertCalled>	(jal ; ra,8000d60e)
+ - 80003224:   	4c0c                c.lw a1,24(s0)           	(c.lw ; a1,24(s0))
+ - 80003226:   	86da                c.mv a3,s6               	(c.mv ; a3,s6)
+ - 80003228:   	865a                c.mv a2,s6               	(c.mv ; a2,s6)
+ - 8000322a:   	95da                c.add a1,s6              	(c.add ; a1,s6)
+ - 8000322c:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
+ - 8000322e:   	dafff0ef            jal ra,80002fdc <prvInsertTimerInActiveList>	(jal ; ra,80002fdc)
+ - 80003232:   	bf39                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
+ - 80003234:   	0027f713            andi a4,a5,2             	(andi ; a4,a5,2)
+ - 80003238:   	e709                c.bnez a4,80003242 <prvTimerTask+0x150>	(c.bnez ; a4,80003242)
+ - 8000323a:   	8522                c.mv a0,s0               	(c.mv ; a0,s0)
+ - 8000323c:   	3dc010ef            jal ra,80004618 <vPortFree>	(jal ; ra,80004618)
+ - 80003240:   	bf01                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
+ - 80003242:   	9bf9                c.andi a5,-2             	(c.andi ; a5,-2)
+ - 80003244:   	02f40423            sb a5,40(s0)             	(sb ; a5,40(s0))
+ - 80003248:   	b721                c.j 80003150 <prvTimerTask+0x5e>	(c.j ; 80003150)
+
+ x 8000e264:   	00000013            addi zero,zero,0         	(addi ; zero,zero,0)
+ x 8000e268:   	00000013            addi zero,zero,0         	(addi ; zero,zero,0)
+ x 8000e26c:   	00000013            addi zero,zero,0         	(addi ; zero,zero,0)
+
+ x 8000e400:   	a7bff06f            jal zero,8000de7a <freertos_risc_v_exception_handler>	(jal ; zero,8000de7a)
+ x 8000e404:   	badff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e408:   	ba9ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e40c:   	ba5ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e410:   	ba1ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e414:   	b9dff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e418:   	b99ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e41c:   	c5dff06f            jal zero,8000e078 <freertos_risc_v_mtimer_interrupt_handler>	(jal ; zero,8000e078)
+ x 8000e420:   	b91ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e424:   	b8dff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e428:   	b89ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e42c:   	b85ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e430:   	b81ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e434:   	b7dff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e438:   	b79ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+ x 8000e43c:   	b75ff06f            jal zero,8000dfb0 <freertos_risc_v_interrupt_handler>	(jal ; zero,8000dfb0)
+
 8000e5a0:   	00b70723            sb a1,14(a4)             	(sb ; a1,14(a4))
 8000e5a4:   	00b706a3            sb a1,13(a4)             	(sb ; a1,13(a4))
 8000e5a8:   	00b70623            sb a1,12(a4)             	(sb ; a1,12(a4))

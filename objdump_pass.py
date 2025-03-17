@@ -5,24 +5,49 @@ from subprocess import Popen, PIPE
 import re
 import os
 
-
-def get_objdump_results(binary, obj_bin="llvm-objdump", offset=0):
-    cmd = f"{obj_bin} -d -M no-aliases {binary}"
+def execute_objdump(binary, obj_bin="llvm-objdump", offset=0, do_offset=False):
+    if do_offset:
+        cmd = f"{obj_bin} -d --adjust-vma={offset} -M no-aliases {binary}"
+    else:
+        cmd = f"{obj_bin} -d -M no-aliases {binary}"
     print(f"Executing `{cmd}`")
     p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     if p.returncode != 0:
         print(err.decode())
         # NOTE / TODO: assume is x86, adjust offset
-        cmd = f"{obj_bin} -d --adjust-vma={offset} {binary}"
+        if do_offset:
+            cmd = f"{obj_bin} -d --adjust-vma={offset} {binary}"
+        else:
+            cmd = f"{obj_bin} -d {binary}"
         print(f"Executing `{cmd}`")
         p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
         if p.returncode != 0:
             print(err.decode())
             exit(1)
+
+    if do_offset:
+        return out.decode()
+
+    output = out.decode()
+    for line in output.splitlines():
+        if not re.match(r"^\s*[0-9a-f]+\s+<", line):
+            continue
+        addr = int(line.split()[0], 16)
+        if addr != offset:
+            return execute_objdump(binary, obj_bin, offset, True)
+        break
+
+    return output
+
+
+def get_objdump_results(binary, obj_bin="llvm-objdump", offset=0):
     disassembly = {}
-    for line in out.decode().splitlines():
+
+    output = execute_objdump(binary, obj_bin, offset)
+
+    for line in output.splitlines():
         if not re.match(r"^\s*[0-9a-f]+:\s", line):
             continue
         address, rest = line.split(":", 1)
@@ -30,15 +55,18 @@ def get_objdump_results(binary, obj_bin="llvm-objdump", offset=0):
         byte_string, instr = re.split(r"\s{2,}", rest)
         byte_string = byte_string.replace(" ", "")
         if "\t" not in instr:
-            disassembly[address] = {
-                    "mnem": "",
-                    "operands": "",
-                    "instruction_str": "",
-                    "instruction_byte": byte_string,
-                    "used": False
-                    }
-            continue
-        mnem, op_str = instr.split("\t")
+            #disassembly[address] = {
+            #        "mnem": "",
+            #        "operands": "",
+            #        "instruction_str": "",
+            #        "instruction_byte": byte_string,
+            #        "used": False
+            #        }
+            #continue
+            mnem = instr
+            op_str = ""
+        else:
+            mnem, op_str = instr.split("\t")
         op_str = op_str.strip().replace(", ", ",")
         mnem = mnem.strip()
         instr = f"{mnem} {op_str}".strip()
