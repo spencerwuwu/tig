@@ -1,12 +1,12 @@
 # Modified from https://github.com/blacktop/docker-ghidra, https://gitlab.com/CinCan/tools/
-FROM openjdk:11-jdk-slim AS build
+FROM openjdk:21-jdk-slim AS build
 
-ARG tool_version=ghidra_10.0.1_PUBLIC_20210708
-ARG tool_tag=Ghidra_10.0.1_build
+ARG tool_version=ghidra_11.3.1_PUBLIC_20250219
+ARG tool_tag=Ghidra_11.3.1_build
 
 ENV TOOL_VERSION=$tool_version
 ENV TOOL_TAG=$tool_tag
-ENV GHIDRA_SHA256=9b68398fcc4c2254a3f8ff231c4e8b2ac75cc8105f819548c7eed3997f8c5a5d
+ENV GHIDRA_SHA256=bcda0a9de8993444766cc255964c65c042b291ddaf6c50d654e316e442b441fa
 
 RUN apt-get update && apt-get install -y wget ca-certificates unzip --no-install-recommends \
     && wget --progress=bar:force -O /tmp/ghidra.zip https://github.com/NationalSecurityAgency/ghidra/releases/download/${TOOL_TAG}/${TOOL_VERSION}.zip \
@@ -18,21 +18,11 @@ RUN apt-get update && apt-get install -y wget ca-certificates unzip --no-install
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives /tmp/* /var/tmp/* /ghidra/docs /ghidra/Extensions/Eclipse /ghidra/licenses
 
-# ==============================================================================
-
-# Make multi-stage build, use jre instead of jdk here, wit h Eclipse OpenJ9
-FROM adoptopenjdk:11-jdk-openj9-bionic AS runtime
-
-ARG tool_version
-ENV TOOL_VERSION=$tool_version
-
 ARG guest_uid=1000
 ARG guest_gid=${guest_uid}
 ARG guest_name=appuser
 
 WORKDIR /ghidra
-
-COPY --from=build /ghidra /ghidra
 
 RUN mkdir /ghidra/projects/
 
