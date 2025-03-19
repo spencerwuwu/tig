@@ -1,0 +1,123 @@
+0000100000  <if_else>:
+    > Src: (entry)
+ 100000:   55                   push rbp                 	(push ; rbp)
+ 100001:   4889E5               mov rbp,rsp              	(mov ; rbp,rsp)
+ 100004:   4883EC20             sub rsp,0x20             	(sub ; rsp,0x20)
+ 100008:   48897DF0             mov qwordptr[rbp-0x10],rdi	(mov ; qwordptr[rbp-0x10],rdi)
+ 10000c:   8975EC               mov dwordptr[rbp-0x14],esi	(mov ; dwordptr[rbp-0x14],esi)
+ 10000f:   837DEC00             cmp dwordptr[rbp-0x14],0 	(cmp ; dwordptr[rbp-0x14],0)
+ 100013:   0F8E0E000000         jle 0x100027             	(jle ; 0x100027)
+    > Dst: 100027, 100019
+
+    > Src: 100000
+ 100019:   8B45EC               mov eax,dwordptr[rbp-0x14]	(mov ; eax,dwordptr[rbp-0x14])
+ 10001c:   83C001               add eax,1                	(add ; eax,1)
+ 10001f:   8945FC               mov dwordptr[rbp-4],eax  	(mov ; dwordptr[rbp-4],eax)
+ 100022:   E91C000000           jmp 0x100043             	(jmp ; 0x100043)
+    > Dst: 100043
+
+    > Src: 100000
+ 100027:   488B7DF0             mov rdi,qwordptr[rbp-0x10]	(mov ; rdi,qwordptr[rbp-0x10])
+ 10002b:   488D75EC             lea rsi,[rbp-0x14]       	(lea ; rsi,[rbp-0x14])
+ 10002f:   E8CC0F0000           call 0x101000            	(call ; 0x101000)
+ 100034:   8B45EC               mov eax,dwordptr[rbp-0x14]	(mov ; eax,dwordptr[rbp-0x14])
+ 100037:   83C001               add eax,1                	(add ; eax,1)
+ 10003a:   8945EC               mov dwordptr[rbp-0x14],eax	(mov ; dwordptr[rbp-0x14],eax)
+ 10003d:   8B45EC               mov eax,dwordptr[rbp-0x14]	(mov ; eax,dwordptr[rbp-0x14])
+ 100040:   8945FC               mov dwordptr[rbp-4],eax  	(mov ; dwordptr[rbp-4],eax)
+    > Dst: 100043
+
+    > Src: 100019, 100027
+ 100043:   8B45FC               mov eax,dwordptr[rbp-4]  	(mov ; eax,dwordptr[rbp-4])
+ 100046:   4883C420             add rsp,0x20             	(add ; rsp,0x20)
+ 10004a:   5D                   pop rbp                  	(pop ; rbp)
+    > Dst: (exit)
+
+
+0000100050  <loops>:
+    > Src: (entry)
+ 100050:   55                   push rbp                 	(push ; rbp)
+ 100051:   4889E5               mov rbp,rsp              	(mov ; rbp,rsp)
+ 100054:   4883EC20             sub rsp,0x20             	(sub ; rsp,0x20)
+ 100058:   48897DF8             mov qwordptr[rbp-8],rdi  	(mov ; qwordptr[rbp-8],rdi)
+ 10005c:   8975F4               mov dwordptr[rbp-0xc],esi	(mov ; dwordptr[rbp-0xc],esi)
+ 10005f:   C745F000000000       mov dwordptr[rbp-0x10],0 	(mov ; dwordptr[rbp-0x10],0)
+    > Dst: 100066
+
+    > Src: 100072, 100050
+ 100066:   8B45F0               mov eax,dwordptr[rbp-0x10]	(mov ; eax,dwordptr[rbp-0x10])
+ 100069:   3B45F4               cmp eax,dwordptr[rbp-0xc]	(cmp ; eax,dwordptr[rbp-0xc])
+ 10006c:   0F8D1B000000         jge 0x10008d             	(jge ; 0x10008d)
+    > Dst: 10008d, 100072
+
+    > Src: 100066
+ 100072:   488B7DF8             mov rdi,qwordptr[rbp-8]  	(mov ; rdi,qwordptr[rbp-8])
+ 100076:   488D75F0             lea rsi,[rbp-0x10]       	(lea ; rsi,[rbp-0x10])
+ 10007a:   E8810F0000           call 0x101000            	(call ; 0x101000)
+ 10007f:   8B45F0               mov eax,dwordptr[rbp-0x10]	(mov ; eax,dwordptr[rbp-0x10])
+ 100082:   83C001               add eax,1                	(add ; eax,1)
+ 100085:   8945F0               mov dwordptr[rbp-0x10],eax	(mov ; dwordptr[rbp-0x10],eax)
+ 100088:   E9D9FFFFFF           jmp 0x100066             	(jmp ; 0x100066)
+    > Dst: (exit)
+
+    > Src: 100066
+ 10008d:   E900000000           jmp 0x100092             	(jmp ; 0x100092)
+    > Dst: 100092
+
+    > Src: 10008d, 10009e
+ 100092:   8B45EC               mov eax,dwordptr[rbp-0x14]	(mov ; eax,dwordptr[rbp-0x14])
+ 100095:   3B45F4               cmp eax,dwordptr[rbp-0xc]	(cmp ; eax,dwordptr[rbp-0xc])
+ 100098:   0F8D1B000000         jge 0x1000b9             	(jge ; 0x1000b9)
+    > Dst: 1000b9, 10009e
+
+    > Src: 100092
+ 10009e:   488B7DF8             mov rdi,qwordptr[rbp-8]  	(mov ; rdi,qwordptr[rbp-8])
+ 1000a2:   488D75EC             lea rsi,[rbp-0x14]       	(lea ; rsi,[rbp-0x14])
+ 1000a6:   E8550F0000           call 0x101000            	(call ; 0x101000)
+ 1000ab:   8B45EC               mov eax,dwordptr[rbp-0x14]	(mov ; eax,dwordptr[rbp-0x14])
+ 1000ae:   83C001               add eax,1                	(add ; eax,1)
+ 1000b1:   8945EC               mov dwordptr[rbp-0x14],eax	(mov ; dwordptr[rbp-0x14],eax)
+ 1000b4:   E9D9FFFFFF           jmp 0x100092             	(jmp ; 0x100092)
+    > Dst: (exit)
+
+    > Src: 100092
+ 1000b9:   C745E805000000       mov dwordptr[rbp-0x18],5 	(mov ; dwordptr[rbp-0x18],5)
+    > Dst: 1000c0
+
+    > Src: 1000ca, 1000b9
+ 1000c0:   837DE800             cmp dwordptr[rbp-0x18],0 	(cmp ; dwordptr[rbp-0x18],0)
+ 1000c4:   0F841B000000         je 0x1000e5              	(je ; 0x1000e5)
+    > Dst: 1000e5, 1000ca
+
+    > Src: 1000c0
+ 1000ca:   488B7DF8             mov rdi,qwordptr[rbp-8]  	(mov ; rdi,qwordptr[rbp-8])
+ 1000ce:   488D75E8             lea rsi,[rbp-0x18]       	(lea ; rsi,[rbp-0x18])
+ 1000d2:   E8290F0000           call 0x101000            	(call ; 0x101000)
+ 1000d7:   8B45E8               mov eax,dwordptr[rbp-0x18]	(mov ; eax,dwordptr[rbp-0x18])
+ 1000da:   83C0FF               add eax,-1               	(add ; eax,-1)
+ 1000dd:   8945E8               mov dwordptr[rbp-0x18],eax	(mov ; dwordptr[rbp-0x18],eax)
+ 1000e0:   E9DBFFFFFF           jmp 0x1000c0             	(jmp ; 0x1000c0)
+    > Dst: (exit)
+
+    > Src: 1000c0
+ 1000e5:   C745E400000000       mov dwordptr[rbp-0x1c],0 	(mov ; dwordptr[rbp-0x1c],0)
+    > Dst: 1000ec
+
+    > Src: 1000ec, 1000e5
+ 1000ec:   488B7DF8             mov rdi,qwordptr[rbp-8]  	(mov ; rdi,qwordptr[rbp-8])
+ 1000f0:   488D75E4             lea rsi,[rbp-0x1c]       	(lea ; rsi,[rbp-0x1c])
+ 1000f4:   E8070F0000           call 0x101000            	(call ; 0x101000)
+ 1000f9:   8B45E4               mov eax,dwordptr[rbp-0x1c]	(mov ; eax,dwordptr[rbp-0x1c])
+ 1000fc:   83C001               add eax,1                	(add ; eax,1)
+ 1000ff:   8945E4               mov dwordptr[rbp-0x1c],eax	(mov ; dwordptr[rbp-0x1c],eax)
+ 100102:   837DE400             cmp dwordptr[rbp-0x1c],0 	(cmp ; dwordptr[rbp-0x1c],0)
+ 100106:   0F85E0FFFFFF         jne 0x1000ec             	(jne ; 0x1000ec)
+    > Dst: 10010c
+
+    > Src: 1000ec
+ 10010c:   8B45F4               mov eax,dwordptr[rbp-0xc]	(mov ; eax,dwordptr[rbp-0xc])
+ 10010f:   4883C420             add rsp,0x20             	(add ; rsp,0x20)
+ 100113:   5D                   pop rbp                  	(pop ; rbp)
+    > Dst: (exit)
+
+

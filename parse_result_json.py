@@ -27,7 +27,9 @@ def print_bb(results, function_name=None):
                 byte_instr = instr["instruction_byte"]
                 str_instr = instr["instruction_str"]
                 addr = instr["instr_offset"] - GHIDRA_ADDR_OFFSET
-                print(f"{addr:7x}:   {byte_instr:20s} {str_instr}")
+                mnem = instr["mnem"]
+                op_str = instr["operands"]
+                print(f"{addr:7x}:   {byte_instr:20s} {str_instr:25s}\t({mnem} ; {op_str})")
 
             problock = "    > Dst: " + ", ".join(f"{addr-GHIDRA_ADDR_OFFSET:x}" for addr in block["exit_vaddrs"])
             if block["is_exit_point"]:

@@ -1,0 +1,123 @@
+0000100000  <if_else>:
+    > Src: (entry)
+ 100000:   55                   PUSH RBP                 	(PUSH ; RBP)
+ 100001:   4889E5               MOV RBP,RSP              	(MOV ; RBP,RSP)
+ 100004:   4883EC20             SUB RSP,0x20             	(SUB ; RSP,0x20)
+ 100008:   48897DF0             MOV qword ptr [RBP + -0x10],RDI	(MOV ; qword ptr [RBP + -0x10],RDI)
+ 10000c:   8975EC               MOV dword ptr [RBP + -0x14],ESI	(MOV ; dword ptr [RBP + -0x14],ESI)
+ 10000f:   837DEC00             CMP dword ptr [RBP + -0x14],0x0	(CMP ; dword ptr [RBP + -0x14],0x0)
+ 100013:   0F8E0E000000         JLE 0x00100027           	(JLE ; 0x00100027)
+    > Dst: 100027, 100019
+
+    > Src: 100000
+ 100019:   8B45EC               MOV EAX,dword ptr [RBP + -0x14]	(MOV ; EAX,dword ptr [RBP + -0x14])
+ 10001c:   83C001               ADD EAX,0x1              	(ADD ; EAX,0x1)
+ 10001f:   8945FC               MOV dword ptr [RBP + -0x4],EAX	(MOV ; dword ptr [RBP + -0x4],EAX)
+ 100022:   E91C000000           JMP 0x00100043           	(JMP ; 0x00100043)
+    > Dst: 100043
+
+    > Src: 100000
+ 100027:   488B7DF0             MOV RDI,qword ptr [RBP + -0x10]	(MOV ; RDI,qword ptr [RBP + -0x10])
+ 10002b:   488D75EC             LEA RSI,[RBP + -0x14]    	(LEA ; RSI,[RBP + -0x14])
+ 10002f:   E8CC0F0000           CALL 0x00101000          	(CALL ; 0x00101000)
+ 100034:   8B45EC               MOV EAX,dword ptr [RBP + -0x14]	(MOV ; EAX,dword ptr [RBP + -0x14])
+ 100037:   83C001               ADD EAX,0x1              	(ADD ; EAX,0x1)
+ 10003a:   8945EC               MOV dword ptr [RBP + -0x14],EAX	(MOV ; dword ptr [RBP + -0x14],EAX)
+ 10003d:   8B45EC               MOV EAX,dword ptr [RBP + -0x14]	(MOV ; EAX,dword ptr [RBP + -0x14])
+ 100040:   8945FC               MOV dword ptr [RBP + -0x4],EAX	(MOV ; dword ptr [RBP + -0x4],EAX)
+    > Dst: 100043
+
+    > Src: 100019, 100027
+ 100043:   8B45FC               MOV EAX,dword ptr [RBP + -0x4]	(MOV ; EAX,dword ptr [RBP + -0x4])
+ 100046:   4883C420             ADD RSP,0x20             	(ADD ; RSP,0x20)
+ 10004a:   5D                   POP RBP                  	(POP ; RBP)
+    > Dst: (exit)
+
+
+0000100050  <loops>:
+    > Src: (entry)
+ 100050:   55                   PUSH RBP                 	(PUSH ; RBP)
+ 100051:   4889E5               MOV RBP,RSP              	(MOV ; RBP,RSP)
+ 100054:   4883EC20             SUB RSP,0x20             	(SUB ; RSP,0x20)
+ 100058:   48897DF8             MOV qword ptr [RBP + -0x8],RDI	(MOV ; qword ptr [RBP + -0x8],RDI)
+ 10005c:   8975F4               MOV dword ptr [RBP + -0xc],ESI	(MOV ; dword ptr [RBP + -0xc],ESI)
+ 10005f:   C745F000000000       MOV dword ptr [RBP + -0x10],0x0	(MOV ; dword ptr [RBP + -0x10],0x0)
+    > Dst: 100066
+
+    > Src: 100072, 100050
+ 100066:   8B45F0               MOV EAX,dword ptr [RBP + -0x10]	(MOV ; EAX,dword ptr [RBP + -0x10])
+ 100069:   3B45F4               CMP EAX,dword ptr [RBP + -0xc]	(CMP ; EAX,dword ptr [RBP + -0xc])
+ 10006c:   0F8D1B000000         JGE 0x0010008d           	(JGE ; 0x0010008d)
+    > Dst: 10008d, 100072
+
+    > Src: 100066
+ 100072:   488B7DF8             MOV RDI,qword ptr [RBP + -0x8]	(MOV ; RDI,qword ptr [RBP + -0x8])
+ 100076:   488D75F0             LEA RSI,[RBP + -0x10]    	(LEA ; RSI,[RBP + -0x10])
+ 10007a:   E8810F0000           CALL 0x00101000          	(CALL ; 0x00101000)
+ 10007f:   8B45F0               MOV EAX,dword ptr [RBP + -0x10]	(MOV ; EAX,dword ptr [RBP + -0x10])
+ 100082:   83C001               ADD EAX,0x1              	(ADD ; EAX,0x1)
+ 100085:   8945F0               MOV dword ptr [RBP + -0x10],EAX	(MOV ; dword ptr [RBP + -0x10],EAX)
+ 100088:   E9D9FFFFFF           JMP 0x00100066           	(JMP ; 0x00100066)
+    > Dst: (exit)
+
+    > Src: 100066
+ 10008d:   E900000000           JMP 0x00100092           	(JMP ; 0x00100092)
+    > Dst: 100092
+
+    > Src: 10008d, 10009e
+ 100092:   8B45EC               MOV EAX,dword ptr [RBP + -0x14]	(MOV ; EAX,dword ptr [RBP + -0x14])
+ 100095:   3B45F4               CMP EAX,dword ptr [RBP + -0xc]	(CMP ; EAX,dword ptr [RBP + -0xc])
+ 100098:   0F8D1B000000         JGE 0x001000b9           	(JGE ; 0x001000b9)
+    > Dst: 1000b9, 10009e
+
+    > Src: 100092
+ 10009e:   488B7DF8             MOV RDI,qword ptr [RBP + -0x8]	(MOV ; RDI,qword ptr [RBP + -0x8])
+ 1000a2:   488D75EC             LEA RSI,[RBP + -0x14]    	(LEA ; RSI,[RBP + -0x14])
+ 1000a6:   E8550F0000           CALL 0x00101000          	(CALL ; 0x00101000)
+ 1000ab:   8B45EC               MOV EAX,dword ptr [RBP + -0x14]	(MOV ; EAX,dword ptr [RBP + -0x14])
+ 1000ae:   83C001               ADD EAX,0x1              	(ADD ; EAX,0x1)
+ 1000b1:   8945EC               MOV dword ptr [RBP + -0x14],EAX	(MOV ; dword ptr [RBP + -0x14],EAX)
+ 1000b4:   E9D9FFFFFF           JMP 0x00100092           	(JMP ; 0x00100092)
+    > Dst: (exit)
+
+    > Src: 100092
+ 1000b9:   C745E805000000       MOV dword ptr [RBP + -0x18],0x5	(MOV ; dword ptr [RBP + -0x18],0x5)
+    > Dst: 1000c0
+
+    > Src: 1000ca, 1000b9
+ 1000c0:   837DE800             CMP dword ptr [RBP + -0x18],0x0	(CMP ; dword ptr [RBP + -0x18],0x0)
+ 1000c4:   0F841B000000         JZ 0x001000e5            	(JZ ; 0x001000e5)
+    > Dst: 1000e5, 1000ca
+
+    > Src: 1000c0
+ 1000ca:   488B7DF8             MOV RDI,qword ptr [RBP + -0x8]	(MOV ; RDI,qword ptr [RBP + -0x8])
+ 1000ce:   488D75E8             LEA RSI,[RBP + -0x18]    	(LEA ; RSI,[RBP + -0x18])
+ 1000d2:   E8290F0000           CALL 0x00101000          	(CALL ; 0x00101000)
+ 1000d7:   8B45E8               MOV EAX,dword ptr [RBP + -0x18]	(MOV ; EAX,dword ptr [RBP + -0x18])
+ 1000da:   83C0FF               ADD EAX,-0x1             	(ADD ; EAX,-0x1)
+ 1000dd:   8945E8               MOV dword ptr [RBP + -0x18],EAX	(MOV ; dword ptr [RBP + -0x18],EAX)
+ 1000e0:   E9DBFFFFFF           JMP 0x001000c0           	(JMP ; 0x001000c0)
+    > Dst: (exit)
+
+    > Src: 1000c0
+ 1000e5:   C745E400000000       MOV dword ptr [RBP + -0x1c],0x0	(MOV ; dword ptr [RBP + -0x1c],0x0)
+    > Dst: 1000ec
+
+    > Src: 1000ec, 1000e5
+ 1000ec:   488B7DF8             MOV RDI,qword ptr [RBP + -0x8]	(MOV ; RDI,qword ptr [RBP + -0x8])
+ 1000f0:   488D75E4             LEA RSI,[RBP + -0x1c]    	(LEA ; RSI,[RBP + -0x1c])
+ 1000f4:   E8070F0000           CALL 0x00101000          	(CALL ; 0x00101000)
+ 1000f9:   8B45E4               MOV EAX,dword ptr [RBP + -0x1c]	(MOV ; EAX,dword ptr [RBP + -0x1c])
+ 1000fc:   83C001               ADD EAX,0x1              	(ADD ; EAX,0x1)
+ 1000ff:   8945E4               MOV dword ptr [RBP + -0x1c],EAX	(MOV ; dword ptr [RBP + -0x1c],EAX)
+ 100102:   837DE400             CMP dword ptr [RBP + -0x1c],0x0	(CMP ; dword ptr [RBP + -0x1c],0x0)
+ 100106:   0F85E0FFFFFF         JNZ 0x001000ec           	(JNZ ; 0x001000ec)
+    > Dst: 10010c
+
+    > Src: 1000ec
+ 10010c:   8B45F4               MOV EAX,dword ptr [RBP + -0xc]	(MOV ; EAX,dword ptr [RBP + -0xc])
+ 10010f:   4883C420             ADD RSP,0x20             	(ADD ; RSP,0x20)
+ 100113:   5D                   POP RBP                  	(POP ; RBP)
+    > Dst: (exit)
+
+
