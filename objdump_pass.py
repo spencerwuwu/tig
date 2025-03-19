@@ -81,14 +81,14 @@ def get_objdump_results(binary, obj_bin="llvm-objdump", offset=0):
                 }
     return disassembly
 
-
-if __name__ ==  "__main__":
-    parser = argparse.ArgumentParser('objdump_pass.py', description='add objdump disassembly')
-    parser.add_argument("--objdump", dest="obj_bin", default="llvm-objdump")
-    parser.add_argument("binary")
-    parser.add_argument("input_json")
-    parser.add_argument("output_json")
-    args = parser.parse_args()
+def objdump_pass(args, imported=False):
+    if not imported:
+        parser = argparse.ArgumentParser('objdump_pass.py', description='add objdump disassembly')
+        parser.add_argument("--objdump", dest="obj_bin", default="llvm-objdump") 
+        parser.add_argument("binary")
+        parser.add_argument("input_json")
+        parser.add_argument("output_json")
+        args = parser.parse_args()
 
     if not os.path.exists(args.binary):
         print(f"{args.binary} not found")
@@ -145,3 +145,7 @@ if __name__ ==  "__main__":
     with open(args.output_json, "w") as fd:
         json.dump(orig_data, fd)
 
+
+
+if __name__ == "__main__":
+	objdump_pass(None)

@@ -47,9 +47,11 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
 		return f"{letin} {x}"
 	if mnem in ["jal", "jalr"]:
 		return f"5 + ({ML} - 1)"
+	if mnem in ["mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu"]:
+		return f"36"
 
 	# TODO : last few else ifs in Rocq RISCV timing function
-	return f"(* ERROR: {mnem} {args} *) 99"
+	return f"(* ERROR: {mnem} {args} *) err_time"
 	
 
 def print_bb(results, function_name=""):
@@ -115,6 +117,7 @@ def preprocess_data(results, function_name):
 if __name__ ==  "__main__":
 	parser = argparse.ArgumentParser('time_of_riscv_function.py', description='pretty print parsed json file')
 	parser.add_argument("bin")
+	parser.add_argument("--riscv_objdump", default="riscv32-unknown-linux-gnu-objdump")
 	parser.add_argument("--function_name", default="")
 	parser.add_argument("--addr_offset", default=0, type=int)
 	args = parser.parse_args()
@@ -123,14 +126,26 @@ if __name__ ==  "__main__":
 
 	# If preproc file doesn't exist, generate
 	preproc_fn = f"{args.bin}.preprocessed.json"
-	if not os.path.exists(preproc_fn):
+	objdump_pass_fn = f"{args.bin}.preprocessed.objdump.json"
+	if not os.path.exists(objdump_pass_fn):
 		result = subprocess.run(["sh", "get_ghidra_basicblocks.sh", args.bin, "x.json"], capture_output=True)
 		json_string = result.stdout.splitlines()[1]
 		data = json.loads(json_string)
 		with open(preproc_fn, "w") as file:
 			file.write(json.dumps(data, indent=2))
+
+		# Run objdump pass
+		# python ./objdump_pass.py example/RTOSDemo.elf example/RTOSDemo.elf.preprocessed.json example/RTOSDemo.elf.preprocessed.objdump.json  --objdump riscv32-unknown-linux-gnu-objdump
+		import objdump_pass
+		class Object:
+			pass
+		objdump_args = Object()
+		objdump_args.binary = args.riscv_objdump
+		objdump_args.input_json = preproc_fn
+		objdump_args.output_json = objdump_pass_fn
+		objdump_pass(objdump_args, imported=True)
 	else:
-		with open(preproc_fn, "r") as file:
+		with open(objdump_pass_fn, "r") as file:
 			data = json.load(file)
 
 	preprocess_data(data, args.function_name)
