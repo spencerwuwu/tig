@@ -128,24 +128,21 @@ if __name__ ==  "__main__":
 	preproc_fn = f"{args.bin}.preprocessed.json"
 	objdump_pass_fn = f"{args.bin}.preprocessed.objdump.json"
 	if not os.path.exists(objdump_pass_fn):
-		result = subprocess.run(["sh", "get_ghidra_basicblocks.sh", args.bin, "x.json"], capture_output=True)
-		json_string = result.stdout.splitlines()[1]
-		data = json.loads(json_string)
-		with open(preproc_fn, "w") as file:
-			file.write(json.dumps(data, indent=2))
+		subprocess.run(["bash", "get_ghidra_basicblocks.sh", args.bin, preproc_fn], capture_output=True)
 
 		# Run objdump pass
 		# python ./objdump_pass.py example/RTOSDemo.elf example/RTOSDemo.elf.preprocessed.json example/RTOSDemo.elf.preprocessed.objdump.json  --objdump riscv32-unknown-linux-gnu-objdump
-		import objdump_pass
+		from objdump_pass import objdump_pass
 		class Object:
 			pass
 		objdump_args = Object()
-		objdump_args.binary = args.riscv_objdump
+		objdump_args.obj_bin = args.riscv_objdump
+		objdump_args.binary = args.bin
 		objdump_args.input_json = preproc_fn
 		objdump_args.output_json = objdump_pass_fn
 		objdump_pass(objdump_args, imported=True)
-	else:
-		with open(objdump_pass_fn, "r") as file:
+
+	with open(objdump_pass_fn, "r") as file:
 			data = json.load(file)
 
 	preprocess_data(data, args.function_name)
