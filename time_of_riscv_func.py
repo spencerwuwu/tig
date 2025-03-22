@@ -40,20 +40,18 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
 		false_time = "3"
 		op1 = '0' if args[0] == 'zero' else f"{store_name} {args[0]}"
 		op2 = '0' if args[1] == 'zero' else f"{store_name} {args[1]}"
-		letin = f"let rs1, rs2 := ({op1}, {op2}) in"
 		if mnem == "beq":
-			condition = "rs1 =? rs2"
+			condition = f"{op1} =? {op2}"
 		elif mnem == "bne":
-			condition = "negb (rs1 =? rs2)"
+			condition = f"negb ({op1} =? {op2})"
 		elif mnem == "blt":
-			condition = ".ltb (toZ 32 rs1) (toZ 32 rs2)"
+			condition = f"Z.ltb (toZ 32 {op1}) (toZ 32 {op2})"
 		elif mnem == "bge":
-			condition = "Z.geb (toZ 32 rs1) (toZ 32 rs2)"
+			condition = "Z.geb (toZ 32 {op1}) (toZ 32 {op2})"
 		elif mnem == "bltu":
-			condition = "rs1 <? rs2"
+			condition = f"{op1} <? {op2}"
 		elif mnem == "bgeu":
-			condition = "negb (rs1 <? rs2)"
-		condition = f"({letin} {condition})"
+			condition = f"negb ({op1} <? {op2})"
 		time = f"if {condition} then {true_time} else {false_time}"
 	elif mnem in ["jal", "jalr"]:
 		time = f"5 + ({ML} - 1)"
@@ -235,83 +233,91 @@ def generate_timing_invariants(results, function_name):
 	blocks = func["blocks"]
 
 	dom_tree, entry = compute_dominator_tree(blocks)
-	l = preorder_traversal(dom_tree, entry, verbose=True)
-	#draw_dominator_tree(dom_tree, blocks)
-	
-	# Build CFG
-	cfg = {}
-	for block in blocks:
-		start_addr = block['bb_start_vaddr'] + GHIDRA_ADDR_OFFSET
-		end_addr = block['instructions'][-1]['instr_offset'] + GHIDRA_ADDR_OFFSET + 4
+
+	def negate(b):
+		match = re.match(r"\(?negb (.+)\)?", b)
+		return match.group(1) if match else f"negb ({b})"
+
+	# Use a defaultdict of lists of sets to track conditions per path
+	block_conditions = defaultdict(list)
+	block_conditions[entry].append(set())  # Entry block has an empty condition set
+
+	for node in preorder_traversal(dom_tree, entry):
+		block = next(x for x in blocks if x["bb_start_vaddr"] == node)
 		block_time, condition, true_time, false_time = time_of_basic_block(block)
-		
-		cfg[start_addr] = {
-			'end_addr': end_addr,
-			'time': block_time,
-			'condition': condition,
-			'true_time': true_time,
-			'false_time': false_time,
-			'predecessors': [addr + GHIDRA_ADDR_OFFSET for addr in block['source_vaddrs']],
-			'successors': [addr + GHIDRA_ADDR_OFFSET for addr in block['exit_vaddrs']],
-			'is_branch': condition is not None,
-			'is_entry': block['is_entry_point']
-		}
 
-	# Build invariant set
-	invariants = {}
-	queue = [addr for addr in cfg if cfg[addr]['is_entry']]
-	branch_origins = {}
-	
-	while queue:
-		addr = queue.pop(0)
-		block = cfg[addr]
-		
-		if addr not in invariants:
-			invariants[addr] = set()
-		
-		# Accumulate time from predecessors
-		for pred in block['predecessors']:
-			if pred in invariants:
-				invariants[addr].update(invariants[pred])
-				
-				# If merging back from a branch, add conditional invariant
-				if pred in branch_origins:
-					cond, t_time, f_time = branch_origins[pred]
-					invariants[addr].add(f"if {cond} then {t_time} else {f_time}")
-		
-		# Add current block time
-		invariants[addr].add(block['time'])
-		
-		# Propagate through successors
-		for i, succ in enumerate(reversed(block['successors'])):
-			if succ not in invariants:
-				invariants[succ] = set()
-			
-			if block['is_branch']:
-				invariants[succ].update(invariants[addr])
-				if i == 1:  # True branch
-					invariants[succ].add(block['true_time'])
-					branch_origins[succ] = (block['condition'], block['true_time'], block['false_time'])
-				else:  # False branch
-					invariants[succ].add(block['false_time'])
-					branch_origins[succ] = (block['condition'], block['true_time'], block['false_time'])
+		if len(block['exit_vaddrs']) == 1:
+			for path_conditions in block_conditions[node]:
+				block_conditions[block['exit_vaddrs'][0]].append(
+					path_conditions | {("true", block_time)})
+
+		elif len(block['exit_vaddrs']) == 2:
+			for path_conditions in block_conditions[node]:
+				true_path = path_conditions | {(condition, f"{block_time} + {true_time}")}
+				false_path = path_conditions | {(negate(condition), f"{block_time} + {false_time}")}
+				block_conditions[block['exit_vaddrs'][0]].append(true_path)
+				block_conditions[block['exit_vaddrs'][1]].append(false_path)
+
+	def factorize_conditions(condition_sets):
+		"""Recursively factor out common conditions."""
+		if len(condition_sets) == 1:
+			condition, time = list(next(iter(condition_sets)))[0]
+			return simplify_expression(time)
+
+		# Group conditions by their first element
+		grouped = defaultdict(list)
+		for conds in condition_sets:
+			if conds:
+				first, *rest = sorted(conds, key=lambda x: x[0])
+				grouped[first].append(set(rest))
 			else:
-				invariants[succ].update(invariants[addr])
-				invariants[succ].add(block['time'])
-				
-			if succ not in queue:
-				queue.append(succ)
+				grouped[None].append(set())
 
-	rocq_output = f"""Definition {function_name}_timing_invs (_ : store) (p : addr) (base_mem : addr -> N) (t : trace) : option Prop :=
-match t with (Addr a, s) :: t' => match a with\n"""
+		# Build nested `if` expressions
+		if None in grouped:  # There is a fallback case
+			fallback = factorize_conditions(grouped.pop(None))
+		else:
+			fallback = None
 
-	for k, v in invariants.items():
-		v = [simplify_expression(str(x)) for x in v]
-		time = simplify_expression(' + '.join(v))
-		rocq_output += f"    | {hex(cfg[k]['end_addr'])} => Some (time_of_trace t' = {time})\n"
+		clauses = []
+		for cond, sub_conditions in grouped.items():
+			inner_expr = factorize_conditions(sub_conditions)
+			clauses.append(f"if {cond[0]} then ({inner_expr})")
 
-	return rocq_output
+		result = " else ".join(clauses)
+		if fallback:
+			result += f" else {fallback}"
+		return result
 
+	invariants = {}
+	for k, v in block_conditions.items():
+		# structured_conditions = [set(x) for x in v if x]  # Convert lists to sets
+		# factored_expression = factorize_conditions(structured_conditions)
+		# invariants[k] = factored_expression
+		invariant = ""
+		for conditions_times in (x for x in v if x):
+			conditions = " && ".join([x[0] for x in conditions_times])
+			times = simplify_expression(" + ".join([x[1] for x in conditions_times]))
+			invariant += f"if {conditions} then {times} else "
+			invariant = invariant.replace("&& true", "")
+		invariant = invariant[:-len(" else ")]
+		invariants[k] = invariant
+	
+	return invariants
+
+def rocq_of_invariants(name, invariants):
+	out = f"""Definition {name}_timing_invs (_ : store) (p : addr)"
+  (base_mem : addr -> N) (t : trace) : option Prop :=
+match t with (Addr a, s) :: t' => match a with
+"""
+	for k, v in dict(sorted(invariants.items())).items():
+		out += f"  | {hex(k)} => Some ({v})\n"
+	out += """  | _ => None
+  end
+| _ => None
+end."""
+
+	return out
 
 if __name__ ==  "__main__":
 	parser = argparse.ArgumentParser('time_of_riscv_function.py', description='pretty print parsed json file')
@@ -345,4 +351,11 @@ if __name__ ==  "__main__":
 
 	preprocess_data(data, args.function_name)
 	# print(time_of_function_basic_blocks(data, args.function_name))
-	print(generate_timing_invariants(data, args.function_name))
+	invs = generate_timing_invariants(data, args.function_name)
+
+	print(rocq_of_invariants(args.function_name, invs))
+
+	blocks = (next(x for x in data if x["function_name"] == args.function_name))["blocks"]
+
+	dom_tree, entry = compute_dominator_tree(blocks)
+	draw_dominator_tree(dom_tree, blocks)
