@@ -5,6 +5,9 @@ import os
 import subprocess
 import re
 import sympy as sp
+from collections import defaultdict
+import networkx as nx
+import matplotlib.pyplot as plt
 
 GHIDRA_ADDR_OFFSET = 0
 
@@ -167,9 +170,73 @@ def simplify_expression(expr):
 
 	return simplified
 
+def compute_dominator_tree(blocks):
+	"""Compute the dominator tree of a control flow graph (CFG)."""
+	cfg = {block["bb_start_vaddr"]: set(block["exit_vaddrs"]) for block in blocks}
+	entry = blocks[0]["bb_start_vaddr"]
+	
+	nodes = set(cfg.keys())
+	dominators = {node: nodes.copy() for node in nodes}
+	dominators[entry] = {entry}
+	
+	changed = True
+	while changed:
+		changed = False
+		for node in nodes - {entry}:
+			preds = {pred for pred in nodes if node in cfg.get(pred, set())}
+			new_dom = {node} | set.intersection(*(dominators[p] for p in preds)) if preds else {node}
+			if dominators[node] != new_dom:
+				dominators[node] = new_dom
+				changed = True
+	
+	dom_tree = defaultdict(set)
+	for node in nodes:
+		for dom in dominators[node] - {node}:
+			if all(dom not in dominators[other] for other in dominators[node] - {node, dom}):
+				dom_tree[dom].add(node)
+	
+	return dom_tree, entry
+
+def preorder_traversal(dom_tree, node, verbose=False):
+	"""Preorder traversal of the dominator tree."""
+	if verbose:
+		print(hex(node))
+	
+	out = [node]
+	for child in sorted(dom_tree[node]):
+		out.extend(preorder_traversal(dom_tree, child, verbose=verbose))
+	return out
+
+def draw_dominator_tree(dom_tree, blocks):
+	"""Draw the dominator tree with instruction details as a top-down tree."""
+	G = nx.DiGraph()
+	labels = {}
+	
+	block_map = {block["bb_start_vaddr"]: block for block in blocks}
+	
+	for parent, children in dom_tree.items():
+		parent_instrs = "\n".join(instr["instruction_str"] for instr in block_map[parent].get("instructions", []))
+		parent_label = f"=={hex(parent)}==\n{parent_instrs}"
+		labels[parent] = parent_label
+		for child in children:
+			child_instrs = "\n".join(instr["instruction_str"] for instr in block_map[child].get("instructions", []))
+			child_label = f"=={hex(child)}==\n{child_instrs}"
+			labels[child] = child_label
+			G.add_edge(parent, child)
+	
+	pos = nx.nx_agraph.graphviz_layout(G, prog="dot")  # Use hierarchical layout for a tree structure
+
+	plt.figure(figsize=(12, 8))
+	nx.draw(G, pos, with_labels=True, labels=labels, node_size=6000, node_color="lightblue", edge_color="gray", font_size=8)
+	plt.show()
+
 def generate_timing_invariants(results, function_name):
 	func = next(x for x in results if x["function_name"] == function_name)
 	blocks = func["blocks"]
+
+	dom_tree, entry = compute_dominator_tree(blocks)
+	l = preorder_traversal(dom_tree, entry, verbose=True)
+	#draw_dominator_tree(dom_tree, blocks)
 	
 	# Build CFG
 	cfg = {}
