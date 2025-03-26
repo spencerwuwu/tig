@@ -36,7 +36,7 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
 	elif mnem in ["lb", "lh", "lw", "lbu", "lhu", "sb", "sh", "sw"]:
 		time = f"5 + ({ML} - 2)"
 	elif mnem in ["beq", "bne", "blt", "bge", "bltu", "bgeu"]:
-		true_time = f"5 + {ML} - 1"
+		true_time = f"5 + ({ML} - 1)"
 		false_time = "3"
 		op1 = '0' if args[0] == 'zero' else f"{store_name} {args[0]}"
 		op2 = '0' if args[1] == 'zero' else f"{store_name} {args[1]}"
@@ -47,7 +47,7 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
 		elif mnem == "blt":
 			condition = f"Z.ltb (toZ 32 {op1}) (toZ 32 {op2})"
 		elif mnem == "bge":
-			condition = "Z.geb (toZ 32 {op1}) (toZ 32 {op2})"
+			condition = f"Z.geb (toZ 32 {op1}) (toZ 32 {op2})"
 		elif mnem == "bltu":
 			condition = f"{op1} <? {op2}"
 		elif mnem == "bgeu":
@@ -236,23 +236,36 @@ def generate_timing_invariants(results, function_name):
 
 	def negate(b):
 		match = re.match(r"\(?negb (.+)\)?", b)
-		return match.group(1) if match else f"negb ({b})"
+		if match:
+			return match.group(1)
+		match = re.match(r"Z.ltb (.*)", b)
+		if match:
+			return f"Z.geb {match.group(1)}"
+		match = re.match(r"Z.geb (.*)", b)
+		if match:
+			return f"Z.ltb {match.group(1)}"
+		return f"negb ({b})"
 
 	# Use a defaultdict of lists of sets to track conditions per path
 	block_conditions = defaultdict(list)
 	block_conditions[entry].append(set())  # Entry block has an empty condition set
+	exit_points = []
 
 	for node in preorder_traversal(dom_tree, entry):
 		block = next(x for x in blocks if x["bb_start_vaddr"] == node)
 		block_time, condition, true_time, false_time = time_of_basic_block(block)
 
+		# Copy in each of these for loops to prevent infinite looping
+		if block['is_exit_point']:
+			for path_conditions in block_conditions[node].copy():
+				exit_points.append(block['instructions'][-1]['instr_offset'])
+				block_conditions[exit_points[-1]].append(path_conditions | {("true", block_time)})
 		if len(block['exit_vaddrs']) == 1:
-			for path_conditions in block_conditions[node]:
+			for path_conditions in block_conditions[node].copy():
 				block_conditions[block['exit_vaddrs'][0]].append(
 					path_conditions | {("true", block_time)})
-
 		elif len(block['exit_vaddrs']) == 2:
-			for path_conditions in block_conditions[node]:
+			for path_conditions in block_conditions[node].copy():
 				true_path = path_conditions | {(condition, f"{block_time} + {true_time}")}
 				false_path = path_conditions | {(negate(condition), f"{block_time} + {false_time}")}
 				block_conditions[block['exit_vaddrs'][0]].append(true_path)
@@ -294,13 +307,19 @@ def generate_timing_invariants(results, function_name):
 		# structured_conditions = [set(x) for x in v if x]  # Convert lists to sets
 		# factored_expression = factorize_conditions(structured_conditions)
 		# invariants[k] = factored_expression
-		invariant = ""
-		for conditions_times in (x for x in v if x):
-			conditions = " && ".join([x[0] for x in conditions_times])
-			times = simplify_expression(" + ".join([x[1] for x in conditions_times]))
-			invariant += f"if {conditions} then {times} else "
-			invariant = invariant.replace("&& true", "")
-		invariant = invariant[:-len(" else ")]
+		invariant = "time_of_trace t' = "
+		if len(v) == 1:
+			v = v[0]
+			if v == set():
+				invariant = "True"
+			else:
+				invariant += (" + ".join([x[1] for x in v]))
+		else:
+			for conditions_times in (x for x in v if x):
+				conditions = " && ".join([x[0] for x in conditions_times if x[0] != "true"]).strip()
+				times = (" + ".join([x[1] for x in conditions_times])).strip()
+				invariant += f"if {conditions} then {times} else "
+			invariant += "err_time"
 		invariants[k] = invariant
 	
 	return invariants
@@ -332,9 +351,15 @@ if __name__ ==  "__main__":
 	# If preproc file doesn't exist, generate
 	preproc_fn = f"{args.bin}.preprocessed.json"
 	objdump_pass_fn = f"{args.bin}.preprocessed.objdump.json"
-	if not os.path.exists(objdump_pass_fn):
-		subprocess.run(["bash", "get_ghidra_basicblocks.sh", args.bin, preproc_fn], capture_output=True)
+	if not os.path.exists(preproc_fn):
+		result = subprocess.run(["bash", "get_ghidra_basicblocks.sh", args.bin, preproc_fn], capture_output=True)
 
+		s = str(result.stdout)
+		s = s[s.index("["):s.rindex("]")+1]
+		with open(preproc_fn, "w") as file:
+			json.dump(json.loads(s), file, indent=2)
+
+	if not os.path.exists(objdump_pass_fn):
 		# Run objdump pass
 		from objdump_pass import objdump_pass
 		class Object:
