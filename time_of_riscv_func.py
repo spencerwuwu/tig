@@ -289,19 +289,24 @@ def generate_timing_invariants(results, function_name):
 			result += f" else {fallback}"
 		return result
 
+	from factor import factor_sets
 	invariants = {}
 	for k, v in block_conditions.items():
-		# structured_conditions = [set(x) for x in v if x]  # Convert lists to sets
-		# factored_expression = factorize_conditions(structured_conditions)
-		# invariants[k] = factored_expression
-		invariant = ""
-		for conditions_times in (x for x in v if x):
-			conditions = " && ".join([x[0] for x in conditions_times])
-			times = simplify_expression(" + ".join([x[1] for x in conditions_times]))
-			invariant += f"if {conditions} then {times} else "
-			invariant = invariant.replace("&& true", "")
-		invariant = invariant[:-len(" else ")]
-		invariants[k] = invariant
+		print("===")
+		for s in v:
+			print(s)
+		input()
+		structured_conditions = [set(x) for x in v if x]  # Convert lists to sets
+		factored_expression = factor_sets(structured_conditions)
+		invariants[k] = factored_expression
+		# invariant = ""
+		# for conditions_times in (x for x in v if x):
+		# 	conditions = " && ".join([x[0] for x in conditions_times])
+		# 	times = simplify_expression(" + ".join([x[1] for x in conditions_times]))
+		# 	invariant += f"if {conditions} then {times} else "
+		# 	invariant = invariant.replace("&& true", "")
+		# invariant = invariant[:-len(" else ")]
+		# invariants[k] = invariant
 	
 	return invariants
 
