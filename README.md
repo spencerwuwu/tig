@@ -17,7 +17,11 @@ int func(int x) {
 void main() {}
 ```
 
+Run:
 ```bash
 riscv32-unknown-elf-gcc prog.c -march=rv32imd -o prog
-poetry run tig prog func # will print out a list of angr constraints for each control-flow path
+poetry run tig prog func
 ```
+to print out a list of angr constraints for each control-flow path.
+
+Invariant generation temporarily disabled
