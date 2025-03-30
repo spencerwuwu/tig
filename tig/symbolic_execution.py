@@ -48,20 +48,30 @@ class ConstraintType(Enum):
     DeadEnd = 3
     Unconstrained = 4
 
+
 class Constraint:
-    def __init__(self, t : ConstraintType, constraints : Union[claripy.ast.bool.Bool, List[claripy.ast.bool.Bool]], next_addr : Optional[int]):
+    def __init__(
+        self,
+        t: ConstraintType,
+        constraints: Union[claripy.ast.bool.Bool, List[claripy.ast.bool.Bool]],
+        next_addr: Optional[int],
+    ):
         self.type = t
-        self.constraints : List[claripy.ast.bool.Bool] = [b for b in (constraints if type(constraints) == list else [constraints]) if not b.is_true()]
+        self.constraints: List[claripy.ast.bool.Bool] = [
+            b
+            for b in ([constraints] if type(constraints) == claripy.ast.bool.Bool else constraints)
+            if not b.is_true()
+        ]
         self.next_addr = next_addr
 
-    def add_constraints(self, l : List[claripy.ast.bool.Bool]):
+    def add_constraints(self, l: List[claripy.ast.bool.Bool]):
         self.constraints += l
 
     def __repr__(self):
         return f"Constraints ({self.type}) -> {self.next_addr}: {self.constraints}"
 
 
-def solve_opt(state : angr.SimState, to_solve : str, default : Any) -> Any:
+def solve_opt(state: angr.SimState, to_solve: str, default: Any) -> Any:
     """Try solving for a value, and return a default if an error occurs
 
     Args:
@@ -76,12 +86,15 @@ def solve_opt(state : angr.SimState, to_solve : str, default : Any) -> Any:
         return state.solver.eval(getattr(state, to_solve))
     except:
         return default
-    
-def reg_constraints(state : angr.SimState, bb: BasicBlock) -> List[claripy.ast.bool.Bool]:
+
+
+def reg_constraints(
+    state: angr.SimState, bb: BasicBlock
+) -> List[claripy.ast.bool.Bool]:
     regs_written = set()
     for i in bb:
         regs_written |= set(i.regs_written)
-    
+
     out = []
     for reg in regs_written:
         reg = getattr(state.regs, reg)
@@ -95,18 +108,19 @@ def reg_constraints(state : angr.SimState, bb: BasicBlock) -> List[claripy.ast.b
                 out.append(reg < max)
     return [x for x in out if not x.is_true()]
 
-def exec_func(
-    p : angr.Project, func : Function
-):
+
+def exec_func(p: angr.Project, func: Function):
     state = p.factory.blank_state(addr=func.entry_point)
 
     def print_mem_write(state):
-        print('Write', state.inspect.mem_write_expr, 'to', state.inspect.mem_write_address)
+        print(
+            "Write", state.inspect.mem_write_expr, "to", state.inspect.mem_write_address
+        )
 
     def print_reg_write(state):
         reg_offset = state.inspect.reg_write_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
-        print('Write', state.inspect.reg_write_expr, 'to', reg_name)
+        print("Write", state.inspect.reg_write_expr, "to", reg_name)
 
     # state.inspect.b('mem_write', when=angr.BP_AFTER, action=print_mem_write)
     # state.inspect.b('reg_write', when=angr.BP_AFTER, action=print_reg_write)
@@ -117,6 +131,7 @@ def exec_func(
     sm.explore(find=func.return_addrs, num_find=100)
 
     return [s.solver.constraints for s in sm.found]
+
 
 def exec_bb(
     p: angr.Project, bb: BasicBlock, input_constraints: List[Constraint]
@@ -137,8 +152,8 @@ def exec_bb(
         state.solver.add(c)
 
     # Setup breakpoints on memory and register writes
-    state.inspect.b('mem_write', when=angr.BP_AFTER)
-    state.inspect.b('reg_write', when=angr.BP_AFTER)
+    state.inspect.b("mem_write", when=angr.BP_AFTER)
+    state.inspect.b("reg_write", when=angr.BP_AFTER)
 
     sm = p.factory.simgr(state, save_unconstrained=True)
 
@@ -183,4 +198,4 @@ def exec_bb(
     #         out[i] = (out[i][0], ([constraints] if not constraints.is_true() else []))"
     """
 
-    return out
+    # return out

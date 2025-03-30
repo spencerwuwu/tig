@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+### This script is old, just a reference for manual CFG traversal
 import json
 import argparse
 import os
