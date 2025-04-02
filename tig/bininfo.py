@@ -17,7 +17,7 @@ class Instruction:
         self.is_big_endian: bool = data["is_big_endian"] == "true"
 
     def __repr__(self):
-        return f"{self.offset}: {self.instr_str} (0x{self.instr_byte})"
+        return f"{hex(self.offset)}: {self.instr_str} (0x{self.instr_byte})"
 
     def __str__(self):
         return self.__repr__()
@@ -47,7 +47,7 @@ class BasicBlock(list):
         return self.instructions[idx]
 
     def __repr__(self):
-        return f"====={self.start_vaddr}=====\n" + "\n".join(
+        return f"====={hex(self.start_vaddr)}=====\n" + "\n".join(
             [str(i) for i in self.instructions]
         )
 
