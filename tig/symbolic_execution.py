@@ -114,26 +114,28 @@ def reg_constraints(
 
 
 class StashMonitor(angr.exploration_techniques.ExplorationTechnique):
+    """Exploration technique that prints stashes before and after each step"""
+
     def __init__(self, verbose=True):
         super().__init__()
         self.verbose = verbose
-    
-    def step(self, simgr, stash='active', **kwargs):
+
+    def step(self, simgr, stash="active", **kwargs):
         # Print pre-step information
         if self.verbose:
             print("\nBefore step:")
             self._print_stashes(simgr)
-        
+
         # Execute the step
         simgr = simgr.step(stash=stash, **kwargs)
-        
+
         # Print post-step information
         if self.verbose:
             print("\nAfter step:")
             self._print_stashes(simgr)
-        
+
         return simgr
-    
+
     def _print_stashes(self, simgr):
         for stash_name, states in simgr.stashes.items():
             if states:
@@ -146,32 +148,44 @@ class StashMonitor(angr.exploration_techniques.ExplorationTechnique):
                 print("]")
 
 
-def make_static_memory_symbolic(project, state, chunk_size=4):
-    """
-    Overwrite .data and .bss sections with symbolic values
-    chunk_size: Size of symbolic chunks (4 or 8 typically works best)
+def make_static_memory_symbolic(
+    project: angr.Project, state: angr.SimState, chunk_size: int = 4
+):
+    """Overwrite .data and .bss sections with symbolic values
+
+    Args:
+        project (angr.Project): Project for target binary
+        state (angr.SimState): State to write into
+        chunk_size (int, optional): Size in bytes of symbolic chunks. Defaults to 4.
     """
     # Get section information
-    data_section = project.loader.main_object.sections_map['.data']
-    bss_section = project.loader.main_object.sections_map['.bss']
-    
+    data_section = project.loader.main_object.sections_map[".data"]
+    bss_section = project.loader.main_object.sections_map[".bss"]
+
     # Process .data section
     for addr in range(data_section.min_addr, data_section.max_addr, chunk_size):
         sym_name = f"data_{hex(addr)}"
-        symbolic_value = state.solver.BVS(sym_name, chunk_size*8)
+        symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
         state.memory.store(addr, symbolic_value)
-    
+
     # Process .bss section
     for addr in range(bss_section.min_addr, bss_section.max_addr, chunk_size):
         sym_name = f"bss_{hex(addr)}"
-        symbolic_value = state.solver.BVS(sym_name, chunk_size*8)
+        symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
         state.memory.store(addr, symbolic_value)
-    
-    return state
 
 
-def exec_func(p: angr.Project, func: Function):
-    state : angr.SimState = p.factory.blank_state(addr=func.entry_point)
+def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
+    """Symbolically executes a function and computes input constraints
+
+    Args:
+        p (angr.Project): Project for target binary
+        func (Function): Function to run
+
+    Returns:
+        List[claripy.ast.bool.Bool]: Constraints corresponding to control-flow paths through the function
+    """
+    state: angr.SimState = p.factory.blank_state(addr=func.entry_point)
     make_static_memory_symbolic(p, state)
 
     def print_mem_write(state):
@@ -195,11 +209,15 @@ def exec_func(p: angr.Project, func: Function):
     f = cfg.kb.functions.function(name=func.name)
     if f is None:
         print("Can't find function", func.name)
-        return
+        return []
     sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
     sm.use_technique(StashMonitor())
 
-    sm.explore(find=func.return_addrs[1], avoid=(lambda s: not (in_regions(s.addr))), num_find=100)
+    sm.explore(
+        find=func.return_addrs[1],
+        avoid=(lambda s: not (in_regions(s.addr))),
+        num_find=100,
+    )
     print(sm.stashes)
 
     return [s.solver.constraints for s in sm.found]
@@ -270,4 +288,4 @@ def exec_bb(
     #         out[i] = (out[i][0], ([constraints] if not constraints.is_true() else []))"
     """
 
-    # return out
+    return []
