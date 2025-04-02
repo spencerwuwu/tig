@@ -113,8 +113,66 @@ def reg_constraints(
     return [x for x in out if not x.is_true()]
 
 
+class StashMonitor(angr.exploration_techniques.ExplorationTechnique):
+    def __init__(self, verbose=True):
+        super().__init__()
+        self.verbose = verbose
+    
+    def step(self, simgr, stash='active', **kwargs):
+        # Print pre-step information
+        if self.verbose:
+            print("\nBefore step:")
+            self._print_stashes(simgr)
+        
+        # Execute the step
+        simgr = simgr.step(stash=stash, **kwargs)
+        
+        # Print post-step information
+        if self.verbose:
+            print("\nAfter step:")
+            self._print_stashes(simgr)
+        
+        return simgr
+    
+    def _print_stashes(self, simgr):
+        for stash_name, states in simgr.stashes.items():
+            if states:
+                print(f"{stash_name} ({len(states)}): [", end="")
+                for s in states:
+                    try:
+                        print(f"{hex(s.addr)},", end="")
+                    except:
+                        print("<symbolic>,", end="")
+                print("]")
+
+
+def make_static_memory_symbolic(project, state, chunk_size=4):
+    """
+    Overwrite .data and .bss sections with symbolic values
+    chunk_size: Size of symbolic chunks (4 or 8 typically works best)
+    """
+    # Get section information
+    data_section = project.loader.main_object.sections_map['.data']
+    bss_section = project.loader.main_object.sections_map['.bss']
+    
+    # Process .data section
+    for addr in range(data_section.min_addr, data_section.max_addr, chunk_size):
+        sym_name = f"data_{hex(addr)}"
+        symbolic_value = state.solver.BVS(sym_name, chunk_size*8)
+        state.memory.store(addr, symbolic_value)
+    
+    # Process .bss section
+    for addr in range(bss_section.min_addr, bss_section.max_addr, chunk_size):
+        sym_name = f"bss_{hex(addr)}"
+        symbolic_value = state.solver.BVS(sym_name, chunk_size*8)
+        state.memory.store(addr, symbolic_value)
+    
+    return state
+
+
 def exec_func(p: angr.Project, func: Function):
-    state = p.factory.blank_state(addr=func.entry_point)
+    state : angr.SimState = p.factory.blank_state(addr=func.entry_point)
+    make_static_memory_symbolic(p, state)
 
     def print_mem_write(state):
         print(
@@ -129,14 +187,20 @@ def exec_func(p: angr.Project, func: Function):
     state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
     state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
 
-    sm = p.factory.simgr(state, save_unconstrained=True)
-    cfg = p.analyses.CFG(regions=[(func.entry_point, ret) for ret in func.return_addrs])
+    sm = p.factory.simgr(state)
+
+    regions = [(func.entry_point, ret) for ret in func.return_addrs]
+    in_regions = lambda addr: any([e <= addr <= r for e, r in regions])
+    cfg = p.analyses.CFG(regions=regions)
     f = cfg.kb.functions.function(name=func.name)
     if f is None:
         print("Can't find function", func.name)
         return
     sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
-    sm.explore(find=func.return_addrs, avoid=[0x800127CC], num_find=100)
+    sm.use_technique(StashMonitor())
+
+    sm.explore(find=func.return_addrs[1], avoid=(lambda s: not (in_regions(s.addr))), num_find=100)
+    print(sm.stashes)
 
     return [s.solver.constraints for s in sm.found]
 
