@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import subprocess
 from typing import Tuple, Optional, Dict
 from tig.extract_basic_blocks import extract_bb
 from tig.bininfo import Instruction, BasicBlock, Function
@@ -178,17 +179,31 @@ def main():
     )
     parser.add_argument("bin", type=str)
     parser.add_argument("func", type=str)
-    parser.add_argument(
-        "--riscv-objdump", default="riscv32-unknown-elf-objdump", type=str
-    )
+    parser.add_argument("--objdump", default="riscv32-unknown-elf-objdump", type=str)
+    parser.add_argument("--disas", action="store_true")
     parser.add_argument("--addr-offset", default=None, type=int)
     parser.add_argument("--out-file", default=None, type=str)
     args = parser.parse_args()
 
+    if args.disas:
+        result = subprocess.run(
+            [
+                args.objdump,
+                "-d",
+                "-M",
+                "no-aliases",
+                args.bin,
+                f"--disassemble={args.func}",
+            ],
+            capture_output=True,
+        )
+        print(result.stdout.decode("utf-8"))
+        return
+
     # Preprocess and load binary information
     preproc_fn = f"{args.bin}.json"
     if not os.path.exists(preproc_fn):
-        data = extract_bb(args.bin, preproc_fn, objdump=args.riscv_objdump)
+        data = extract_bb(args.bin, preproc_fn, objdump=args.objdump)
     else:
         with open(preproc_fn, "r") as file:
             data = json.load(file)

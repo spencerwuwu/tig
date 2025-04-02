@@ -59,7 +59,11 @@ class Constraint:
         self.type = t
         self.constraints: List[claripy.ast.bool.Bool] = [
             b
-            for b in ([constraints] if type(constraints) == claripy.ast.bool.Bool else constraints)
+            for b in (
+                [constraints]
+                if type(constraints) == claripy.ast.bool.Bool
+                else constraints
+            )
             if not b.is_true()
         ]
         self.next_addr = next_addr
@@ -122,13 +126,17 @@ def exec_func(p: angr.Project, func: Function):
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
         print("Write", state.inspect.reg_write_expr, "to", reg_name)
 
-    # state.inspect.b('mem_write', when=angr.BP_AFTER, action=print_mem_write)
-    # state.inspect.b('reg_write', when=angr.BP_AFTER, action=print_reg_write)
+    state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
+    state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
 
     sm = p.factory.simgr(state, save_unconstrained=True)
-    # cfg = p.analyses.CFGFast(regions=[(func.entry_point, ret) for ret in func.return_addrs] + [(0x80012288-4, 0x80012288+4)] + [(2147559372-4, 2147559372+4)])
-    # sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
-    sm.explore(find=func.return_addrs, num_find=100)
+    cfg = p.analyses.CFG(regions=[(func.entry_point, ret) for ret in func.return_addrs])
+    f = cfg.kb.functions.function(name=func.name)
+    if f is None:
+        print("Can't find function", func.name)
+        return
+    sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
+    sm.explore(find=func.return_addrs, avoid=[0x800127CC], num_find=100)
 
     return [s.solver.constraints for s in sm.found]
 
