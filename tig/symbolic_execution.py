@@ -174,6 +174,8 @@ def make_static_memory_symbolic(
         symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
         state.memory.store(addr, symbolic_value)
 
+    return state
+
 
 def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
@@ -186,7 +188,7 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
         List[claripy.ast.bool.Bool]: Constraints corresponding to control-flow paths through the function
     """
     state: angr.SimState = p.factory.blank_state(addr=func.entry_point)
-    make_static_memory_symbolic(p, state)
+    state = make_static_memory_symbolic(p, state, chunk_size=4)
 
     def print_mem_write(state):
         print(
@@ -205,7 +207,7 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
 
     regions = [(func.entry_point, ret) for ret in func.return_addrs]
     in_regions = lambda addr: any([e <= addr <= r for e, r in regions])
-    cfg = p.analyses.CFG(regions=regions)
+    cfg = p.analyses.CFGFast()
     f = cfg.kb.functions.function(name=func.name)
     if f is None:
         print("Can't find function", func.name)
@@ -214,11 +216,10 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     sm.use_technique(StashMonitor())
 
     sm.explore(
-        find=func.return_addrs[1],
-        avoid=(lambda s: not (in_regions(s.addr))),
+        find=func.return_addrs,
+        # avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
         num_find=100,
     )
-    print(sm.stashes)
 
     return [s.solver.constraints for s in sm.found]
 

@@ -142,3 +142,4 @@ examples/*
 !examples/*.elf
 !examples/*.c
 !examples/*.json
+!examples/*.constraints

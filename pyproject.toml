@@ -9,9 +9,11 @@ python = "^3.10"
 matplotlib = "^3.10.1"
 sympy = "^1.13.3"
 networkx = "^3.4.2"
-angr = "^9.2.148"
+# angr = "^9.2.148"
+angr = { git = "https://github.com/CharlesAverill/angr@master" }
 archinfo = "^9.2.148"
-pypcode = "^3.0.3"
+# pypcode = "^3.0.3"
+pypcode = { git = "https://github.com/spencerwuwu/pypcode" }
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.15.0"
