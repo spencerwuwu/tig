@@ -177,6 +177,40 @@ def make_static_memory_symbolic(
     return state
 
 
+def make_registers_symbolic(
+    project: angr.Project, state: angr.SimState, chunk_size: int = 4
+):
+    # TODO: ugly
+    lang = "RISCV:LE:32:default"
+    sparc_lang = None
+    for arch in pypcode.Arch.enumerate():
+        for l in arch.languages:
+            if l.id == lang:
+                sparc_lang = l
+                break
+        if sparc_lang is not None:
+            break
+    if sparc_lang is None:
+        raise Exception(f"Unable to find SPARC language for {lang}")
+    arch = archinfo.ArchPcode(sparc_lang)
+
+    import re
+    # make registers symbolic: sp, ra, gp; a0...a?, s0...s?
+    for reg_name in arch.registers:
+        if not (re.match(r"(a|s)\d+", reg_name) or \
+                reg_name in ["sp", "ra", "gp"]
+                ):
+            continue
+        offset, size_bytes = arch.registers[reg_name]
+        size_bits = size_bytes * 8
+
+        sym_val = claripy.BVS(f"sym_{reg_name}", size_bits)
+
+        # Write symbolic value to register
+        state.registers.store(reg_name, sym_val)
+    return state
+
+
 def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
 
@@ -187,8 +221,21 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     Returns:
         List[claripy.ast.bool.Bool]: Constraints corresponding to control-flow paths through the function
     """
-    state: angr.SimState = p.factory.blank_state(addr=func.entry_point)
+    # Reference: https://docs.angr.io/en/latest/appendix/options.html
+    #  - angr.options.CONSERVATIVE_READ_STRATEGY sounds good but oddly useless
+    state: angr.SimState = p.factory.blank_state(addr=func.entry_point,
+                                                 mode="symbolic",
+                                                 add_options={
+                                                        #angr.options.LAZY_SOLVES, # TODO: Maybe helpful?
+                                                        angr.options.CACHELESS_SOLVER,
+                                                        angr.options.CALLLESS # ?
+                                                    },
+                                                 )
+
+
     state = make_static_memory_symbolic(p, state, chunk_size=4)
+
+    state = make_registers_symbolic(p, state, chunk_size=4)
 
     def print_mem_write(state):
         print(
@@ -200,8 +247,25 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
         print("Write", state.inspect.reg_write_expr, "to", reg_name)
 
+    def print_mem_read(state):
+        print(
+            "Read", state.inspect.mem_read_expr, "to", state.inspect.mem_read_address
+        )
+
+    def print_reg_read(state):
+        reg_offset = state.inspect.reg_write_offset  # Get the register offset
+        reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
+        print("Write", state.inspect.reg_write_expr, "to", reg_name)
+
+    def print_addr(state):
+        print(hex(state.inspect.instruction))
+
+
+    state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
     state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
     state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
+    state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
+    state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
 
     sm = p.factory.simgr(state)
 
