@@ -165,7 +165,10 @@ def generate_timing_invariants(bin_path: str, func: Function) -> Dict[int, str]:
     # For each node
 
     p = get_project(bin_path)
-    print(exec_func(p, func))
+    f = exec_func(p, func)
+    with open("paths.txt", "w") as file:
+        for x in f:
+            file.write(f"{x}\n")
     # for block in func:
     #     print(f"====={block.start_vaddr}=====")
     #     print(exec_bb(p, block, []))

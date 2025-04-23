@@ -210,6 +210,9 @@ def make_registers_symbolic(
         state.registers.store(reg_name, sym_val)
     return state
 
+class ConcretizationStrategyNever(angr.concretization_strategies.SimConcretizationStrategy):
+    def _concretize(self, memory, addr, **kwargs):
+        return [addr]
 
 def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
@@ -228,10 +231,16 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
                                                  add_options={
                                                         #angr.options.LAZY_SOLVES, # TODO: Maybe helpful?
                                                         angr.options.CACHELESS_SOLVER,
-                                                        angr.options.CALLLESS # ?
+                                                        angr.options.CALLLESS, # ?
+                                                        angr.options.SYMBOLIC_WRITE_ADDRESSES,
+                                                        angr.options.CONSERVATIVE_READ_STRATEGY
                                                     },
                                                  )
-
+    
+    # state.memory.write_strategies = [ConcretizationStrategyNever()]
+    # state.memory.read_strategies = [ConcretizationStrategyNever()]
+    # state.registers.write_strategies = [ConcretizationStrategyNever()]
+    # state.registers.read_strategies = [ConcretizationStrategyNever()]
 
     state = make_static_memory_symbolic(p, state, chunk_size=4)
 
@@ -275,17 +284,31 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     f = cfg.kb.functions.function(name=func.name)
     if f is None:
         print("Can't find function", func.name)
-        return []
+        return set()
     sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
     sm.use_technique(StashMonitor())
 
-    sm.explore(
-        find=func.return_addrs,
-        # avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
-        num_find=100,
-    )
+    sm.step()
 
-    return [s.solver.constraints for s in sm.found]
+    # sm.explore(
+    #     find=func.return_addrs,
+    #     # avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
+    #     num_find=100,
+    # )
+
+    def dedup_constraints(constraint_list):
+        out = []
+        seen = set()
+        for c in constraint_list:
+            if str(c) not in seen:
+                seen.add(repr(c))
+                out.append(c)
+        return out
+    
+    for s in sm.active:
+        s.solver.simplify()
+
+    return dedup_constraints([s.solver.constraints for s in sm.active])
 
 
 def exec_bb(
