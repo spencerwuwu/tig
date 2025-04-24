@@ -5,8 +5,7 @@ import subprocess
 from typing import Tuple, Optional, Dict
 from tig.extract_basic_blocks import extract_bb
 from tig.bininfo import Instruction, BasicBlock, Function
-from tig.tree import compute_dominator_tree, preorder_traversal
-from tig.symbolic_execution import get_project, ConstraintType, exec_bb, exec_func
+from tig.symbolic_execution import get_project, exec_func
 
 
 def time_of_riscv_instr(

@@ -1,7 +1,6 @@
 import pypcode, archinfo, angr, claripy
-from typing import List, Union, Optional, Any
-from tig.bininfo import BasicBlock, Function
-from enum import Enum
+from typing import List
+from tig.bininfo import Function
 import logging
 
 logging.getLogger("angr").setLevel(logging.ERROR)
@@ -39,78 +38,6 @@ def get_project(bin_path: str, lang: str = "RISCV:LE:32:default") -> angr.Projec
     pcode_arch = archinfo.ArchPcode(sparc_lang)
 
     return angr.Project(bin_path, arch=pcode_arch, auto_load_libs=False)
-
-
-class ConstraintType(Enum):
-    Unknown = 0
-    BranchTrue = 1
-    BranchFalse = 2
-    DeadEnd = 3
-    Unconstrained = 4
-
-
-class Constraint:
-    def __init__(
-        self,
-        t: ConstraintType,
-        constraints: Union[claripy.ast.bool.Bool, List[claripy.ast.bool.Bool]],
-        next_addr: Optional[int],
-    ):
-        self.type = t
-        self.constraints: List[claripy.ast.bool.Bool] = [
-            b
-            for b in (
-                [constraints]
-                if type(constraints) == claripy.ast.bool.Bool
-                else constraints
-            )
-            if not b.is_true()
-        ]
-        self.next_addr = next_addr
-
-    def add_constraints(self, l: List[claripy.ast.bool.Bool]):
-        self.constraints += l
-
-    def __repr__(self):
-        return f"Constraints ({self.type}) -> {self.next_addr}: {self.constraints}"
-
-
-def solve_opt(state: angr.SimState, to_solve: str, default: Any) -> Any:
-    """Try solving for a value, and return a default if an error occurs
-
-    Args:
-        state (angr.SimState): State to solve in
-        to_solve (str): State attribute to solve
-        default (Any): Default value to return in case of error
-
-    Returns:
-        Any: Default value if an error has occurred
-    """
-    try:
-        return state.solver.eval(getattr(state, to_solve))
-    except:
-        return default
-
-
-def reg_constraints(
-    state: angr.SimState, bb: BasicBlock
-) -> List[claripy.ast.bool.Bool]:
-    regs_written = set()
-    for i in bb:
-        regs_written |= set(i.regs_written)
-
-    out = []
-    for reg in regs_written:
-        reg = getattr(state.regs, reg)
-        min, max = state.solver.min(reg), state.solver.max(reg)
-
-        if min == max:
-            out.append(reg == min)
-        else:
-            out.append(min <= reg)
-            if max < 2**32:
-                out.append(reg < max)
-    return [x for x in out if not x.is_true()]
 
 
 class StashMonitor(angr.exploration_techniques.ExplorationTechnique):
@@ -195,24 +122,140 @@ def make_registers_symbolic(
     arch = archinfo.ArchPcode(sparc_lang)
 
     import re
+
     # make registers symbolic: sp, ra, gp; a0...a?, s0...s?
     for reg_name in arch.registers:
-        if not (re.match(r"(a|s)\d+", reg_name) or \
-                reg_name in ["sp", "ra", "gp"]
-                ):
+        if not (re.match(r"(a|s)\d+", reg_name) or reg_name in ["sp", "ra", "gp"]):
             continue
         offset, size_bytes = arch.registers[reg_name]
         size_bits = size_bytes * 8
 
-        sym_val = claripy.BVS(f"sym_{reg_name}", size_bits)
+        sym_val = claripy.BVS(f"reg_{reg_name}", size_bits)
 
         # Write symbolic value to register
         state.registers.store(reg_name, sym_val)
     return state
 
-class ConcretizationStrategyNever(angr.concretization_strategies.SimConcretizationStrategy):
-    def _concretize(self, memory, addr, **kwargs):
-        return [addr]
+
+def is_clz(expr):
+    """Determines if a given claripy AST expression implements a Count Leading Zeros (CLZ) operation.
+
+    Returns:
+        The operand if it is a CLZ operation, otherwise None.
+    """
+    if expr.op != "If":
+        return None
+
+    expected_value = 0  # Expected return value for leading zeros
+    bit_extracted_expr = None  # Placeholder for the extracted bitvector
+
+    while expr.op == "If":
+        cond, true_branch, false_branch = expr.args
+
+        # Condition should check a specific bit equality to 1
+        if cond.op != "__eq__" or len(cond.args) != 2:
+            return None
+
+        bit_check, one_value = cond.args
+        if one_value is not claripy.BVV(1, 1):
+            return None
+
+        # The bit check should be an extract operation
+        if bit_check.op != "Extract" or len(bit_check.args) != 3:
+            return None
+
+        high, low, extracted_expr = bit_check.args
+        if high != low:  # Ensures it's a single-bit extract
+            return None
+
+        # Ensure we are decrementing from the highest bit downwards
+        expected_bit = 32 - 1 - expected_value
+        if high != expected_bit:
+            return None
+
+        # Check the true branch returns the expected count of leading zeros
+        if (
+            not isinstance(true_branch, claripy.ast.BV)
+            or true_branch.concrete_value is None
+        ):
+            return None
+
+        if true_branch.concrete_value != expected_value:
+            return None
+
+        # Move to the next condition in the nested If-Else structure
+        expr = false_branch
+        expected_value += 1
+
+        # Store the bitvector if we haven't already
+        if bit_extracted_expr is None:
+            bit_extracted_expr = extracted_expr
+        elif bit_extracted_expr is not extracted_expr:
+            return None  # Ensure the same bitvector is used throughout
+
+    # Final check: The last branch should return bit_width (full zero case)
+    if not isinstance(expr, claripy.ast.BV) or expr.concrete_value is None:
+        return None
+
+    if expr.concrete_value == 32:
+        return bit_extracted_expr  # Return the operand of CLZ
+    else:
+        return None
+
+
+def replace_clz(expr):
+    new_vars = []
+    args = list(expr.args)  # Copy to avoid modifying the tuple directly
+
+    for i, arg in enumerate(expr.args):
+        if isinstance(arg, claripy.ast.Base):  # Check if it's another AST node
+            clz_target = is_clz(arg)
+            if clz_target is not None:
+                new_bvs = claripy.BVS(f"CLZ_{clz_target}", 11)
+                args[i] = new_bvs  # Replace CLZ expression
+                new_vars.append(new_bvs)  # Store new variable
+            else:
+                sub_vars = replace_clz(arg)
+                new_vars.extend(sub_vars)
+
+    if new_vars:  # If modifications were made, create a new expression
+        expr.args = args
+        return expr, new_vars
+    return expr, []
+
+
+class TIGSimplify(angr.exploration_techniques.ExplorationTechnique):
+    """Exploration technique that simplifies constraints as steps occur"""
+
+    def __init__(self, verbose=True):
+        super().__init__()
+        self.verbose = verbose
+
+    def step(self, simgr, stash="active", **kwargs):
+        simgr = simgr.step(stash=stash, **kwargs)
+
+        for i in range(len(getattr(simgr, stash))):
+            s = getattr(simgr, stash)[i]
+            new_constraints = []
+
+            for c in s.solver._solver.constraints:
+                new_c, new_vars = replace_clz(c)  # Replace CLZ patterns
+
+                # Add new symbolic variables to solver
+                for var in new_vars:
+                    s.solver.add(
+                        var == var
+                    )  # This ensures the solver tracks the variable
+
+                new_constraints.append(new_c)
+
+            # Replace old constraints
+            s.solver._solver.constraints = new_constraints
+
+            getattr(simgr, stash)[i] = s  # Update the state in the stash
+
+        return simgr
+
 
 def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
@@ -226,21 +269,23 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     """
     # Reference: https://docs.angr.io/en/latest/appendix/options.html
     #  - angr.options.CONSERVATIVE_READ_STRATEGY sounds good but oddly useless
-    state: angr.SimState = p.factory.blank_state(addr=func.entry_point,
-                                                 mode="symbolic",
-                                                 add_options={
-                                                        #angr.options.LAZY_SOLVES, # TODO: Maybe helpful?
-                                                        angr.options.CACHELESS_SOLVER,
-                                                        angr.options.CALLLESS, # ?
-                                                        angr.options.SYMBOLIC_WRITE_ADDRESSES,
-                                                        angr.options.CONSERVATIVE_READ_STRATEGY
-                                                    },
-                                                 )
-    
-    # state.memory.write_strategies = [ConcretizationStrategyNever()]
-    # state.memory.read_strategies = [ConcretizationStrategyNever()]
-    # state.registers.write_strategies = [ConcretizationStrategyNever()]
-    # state.registers.read_strategies = [ConcretizationStrategyNever()]
+    state: angr.SimState = p.factory.blank_state(
+        addr=func.entry_point,
+        mode="symbolic",
+        add_options={
+            # angr.options.LAZY_SOLVES, # TODO: Maybe helpful?
+            angr.options.CACHELESS_SOLVER,
+            angr.options.CALLLESS,
+            # angr.options.AVOID_MULTIVALUED_READS,
+            # angr.options.SYMBOLIC_WRITE_ADDRESSES,
+            # angr.options.CONSERVATIVE_READ_STRATEGY
+        },
+    )
+
+    # state.memory.write_strategies = [SymbolicOnlyConcretization()]
+    # state.memory.read_strategies = [SymbolicOnlyConcretization()]
+    # state.registers.write_strategies = [NoConcretizeSPGP()]
+    # state.registers.read_strategies = [NoConcretizeSPGP()]
 
     state = make_static_memory_symbolic(p, state, chunk_size=4)
 
@@ -257,9 +302,7 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
         print("Write", state.inspect.reg_write_expr, "to", reg_name)
 
     def print_mem_read(state):
-        print(
-            "Read", state.inspect.mem_read_expr, "to", state.inspect.mem_read_address
-        )
+        print("Read", state.inspect.mem_read_expr, "to", state.inspect.mem_read_address)
 
     def print_reg_read(state):
         reg_offset = state.inspect.reg_write_offset  # Get the register offset
@@ -269,12 +312,12 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
     def print_addr(state):
         print(hex(state.inspect.instruction))
 
-
-    state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
-    state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
-    state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
-    state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
-    state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
+    # state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
+    # state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
+    # state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
+    # state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
+    # state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
+    state.memory.unconstrained_use_addr = True
 
     sm = p.factory.simgr(state)
 
@@ -287,14 +330,14 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
         return set()
     sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
     sm.use_technique(StashMonitor())
+    sm.use_technique(TIGSimplify())
 
-    sm.step()
-
-    # sm.explore(
-    #     find=func.return_addrs,
-    #     # avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
-    #     num_find=100,
-    # )
+    sm.explore(
+        find=func.return_addrs,
+        # avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
+        num_find=100,
+    )
+    # sm.step()
 
     def dedup_constraints(constraint_list):
         out = []
@@ -304,76 +347,8 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
                 seen.add(repr(c))
                 out.append(c)
         return out
-    
-    for s in sm.active:
+
+    for s in sm.active + sm.found:
         s.solver.simplify()
 
-    return dedup_constraints([s.solver.constraints for s in sm.active])
-
-
-def exec_bb(
-    p: angr.Project, bb: BasicBlock, input_constraints: List[Constraint]
-) -> List[Constraint]:
-    """Symbolically execute a BasicBlock and retrieve its constraints
-
-    Args:
-        p (angr.Project): Project for targeted binary
-        bb (BasicBlock): Block to execute
-
-    Returns:
-        List[Constraint]: List of constraints, annotated with their type
-    """
-
-    # Setup input state
-    state = p.factory.blank_state(addr=bb.start_vaddr)
-    for c in input_constraints:
-        state.solver.add(c)
-
-    # Setup breakpoints on memory and register writes
-    state.inspect.b("mem_write", when=angr.BP_AFTER)
-    state.inspect.b("reg_write", when=angr.BP_AFTER)
-
-    sm = p.factory.simgr(state, save_unconstrained=True)
-
-    sm.step()
-
-    """
-    out = []
-    if len(sm.active) == 2:
-        true_addr = solve_opt(sm.active[0], "addr", None)
-        out.append(Constraint(ConstraintType.BranchTrue, sm.active[0].solver.constraints, true_addr))
-        out[-1].add_constraints(reg_constraints(sm.active[0], bb))
-        false_addr = solve_opt(sm.active[1], "addr", None)
-        out.append(Constraint(ConstraintType.BranchFalse, sm.active[1].solver.constraints, false_addr))
-        out[-1].add_constraints(reg_constraints(sm.active[1], bb))
-    else:
-        for s in sm.active:
-            addr = solve_opt(s, "addr", None)
-            for c in s.solver.constraints:
-                out.append(Constraint(ConstraintType.Unknown, c, addr))
-                out[-1].add_constraints(reg_constraints(s, bb))
-    for s in sm.deadended:
-        addr = solve_opt(s, "addr", None)
-        for c in s.solver.constraints:
-            out.append(Constraint(ConstraintType.DeadEnd, c, addr))
-            out[-1].add_constraints(reg_constraints(s, bb))
-    for s in sm.unconstrained:
-        addr = solve_opt(s, "addr", None)
-        for c in s.solver.constraints:
-            out.append(Constraint(ConstraintType.Unconstrained, c, addr))
-            out[-1].add_constraints(reg_constraints(s, bb))
-    for s in sm.pruned + sm.unsat:
-        addr = solve_opt(s, "addr", None)
-        for c in s.solver.constraints:
-            out.append(Constraint(ConstraintType.Unknown, c, addr))
-            out[-1].add_constraints(reg_constraints(s, bb))
-
-    # for i in range(len(out)):
-    #     constraints = out[i].con
-    #     if type(constraints) == list:
-    #         out[i] = (out[i][0], [x for x in constraints if not x.is_true()])
-    #     elif type(constraints) == claripy.ast.bool.Bool:
-    #         out[i] = (out[i][0], ([constraints] if not constraints.is_true() else []))"
-    """
-
-    return []
+    return dedup_constraints([s.solver.constraints for s in sm.found])
