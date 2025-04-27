@@ -8,6 +8,8 @@ logging.getLogger("claripy").setLevel(logging.ERROR)
 logging.getLogger("pyvex").setLevel(logging.ERROR)
 logging.getLogger("cle").setLevel(logging.ERROR)
 
+# NOTE: Customize memory overwrite
+import tig.memory_mixins
 
 def get_project(bin_path: str, lang: str = "RISCV:LE:32:default") -> angr.Project:
     """Get an angr Project using pypcode
@@ -107,22 +109,8 @@ def make_static_memory_symbolic(
 def make_registers_symbolic(
     project: angr.Project, state: angr.SimState, chunk_size: int = 4
 ):
-    # TODO: ugly
-    lang = "RISCV:LE:32:default"
-    sparc_lang = None
-    for arch in pypcode.Arch.enumerate():
-        for l in arch.languages:
-            if l.id == lang:
-                sparc_lang = l
-                break
-        if sparc_lang is not None:
-            break
-    if sparc_lang is None:
-        raise Exception(f"Unable to find SPARC language for {lang}")
-    arch = archinfo.ArchPcode(sparc_lang)
-
     import re
-
+    arch = project.arch
     # make registers symbolic: sp, ra, gp; a0...a?, s0...s?
     for reg_name in arch.registers:
         if not (re.match(r"(a|s)\d+", reg_name) or reg_name in ["sp", "ra", "gp"]):
@@ -131,7 +119,6 @@ def make_registers_symbolic(
         size_bits = size_bytes * 8
 
         sym_val = claripy.BVS(f"reg_{reg_name}", size_bits)
-
         # Write symbolic value to register
         state.registers.store(reg_name, sym_val)
     return state
@@ -257,12 +244,62 @@ class TIGSimplify(angr.exploration_techniques.ExplorationTechnique):
         return simgr
 
 
-def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
+def set_debug_inspect(state: angr.SimState) -> None:
+    def print_mem_write(state):
+        print(
+            " MEM Write", state.inspect.mem_write_expr, "to", state.inspect.mem_write_address
+        )
+
+    def print_reg_write(state):
+        reg_offset = state.inspect.reg_write_offset  # Get the register offset
+        reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
+        print(" REG Write", state.inspect.reg_write_expr, "to", reg_name)
+
+    def print_mem_read(state):
+        print(" MEM Read ", state.inspect.mem_read_expr, "from", state.inspect.mem_read_address)
+
+    def print_reg_read(state):
+        reg_offset = state.inspect.reg_read_offset  # Get the register offset
+        reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
+        print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
+
+    def print_addr(state):
+        print("->", hex(state.inspect.instruction))
+
+    def print_symvar(state):
+        print(" + NEW", state.inspect.symbolic_name)
+
+    def print_con(state):
+        con_result = state.inspect.address_concretization_result
+        if con_result is None:
+            result = "-"
+        else:
+            result = "[" + ",".join(hex(e) for e in con_result) + "]"
+        #print(state.solver.symbolic(state.inspect.address_concretization_expr))
+        print(" + CONCRETIZE:",
+              "\n\tStrategy:", state.inspect.address_concretization_strategy,
+              #"\n\tConcre Expr:", state.inspect.address_concretization_expr,
+              "\n\tResult:", result,
+              )
+
+    state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
+    state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
+    state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
+    state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
+    state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
+    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=print_symvar)
+    state.inspect.b("address_concretization", when=angr.BP_AFTER, action=print_con)
+
+
+def exec_func(p: angr.Project, 
+              func: Function, 
+              debug: bool = False) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
 
     Args:
         p (angr.Project): Project for target binary
         func (Function): Function to run
+        degug (bool): debug printing
 
     Returns:
         List[claripy.ast.bool.Bool]: Constraints corresponding to control-flow paths through the function
@@ -278,45 +315,36 @@ def exec_func(p: angr.Project, func: Function) -> List[claripy.ast.bool.Bool]:
             angr.options.CALLLESS,
             # angr.options.AVOID_MULTIVALUED_READS,
             # angr.options.SYMBOLIC_WRITE_ADDRESSES,
-            # angr.options.CONSERVATIVE_READ_STRATEGY
+            # angr.options.CONSERVATIVE_READ_STRATEGY,
+            angr.options.SYMBOLIC_INITIAL_VALUES,
+            angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY
         },
     )
-
-    # state.memory.write_strategies = [SymbolicOnlyConcretization()]
-    # state.memory.read_strategies = [SymbolicOnlyConcretization()]
-    # state.registers.write_strategies = [NoConcretizeSPGP()]
-    # state.registers.read_strategies = [NoConcretizeSPGP()]
 
     state = make_static_memory_symbolic(p, state, chunk_size=4)
 
     state = make_registers_symbolic(p, state, chunk_size=4)
 
-    def print_mem_write(state):
-        print(
-            "Write", state.inspect.mem_write_expr, "to", state.inspect.mem_write_address
-        )
+    # Create customize traces of symbolic pointers
+    state.globals["sym_mem"] = {}
 
-    def print_reg_write(state):
-        reg_offset = state.inspect.reg_write_offset  # Get the register offset
-        reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
-        print("Write", state.inspect.reg_write_expr, "to", reg_name)
+    # For debug printing
+    if debug:
+        set_debug_inspect(state)
 
-    def print_mem_read(state):
-        print("Read", state.inspect.mem_read_expr, "to", state.inspect.mem_read_address)
+    def sym_mem_read(state):
+        if len(state.inspect.mem_read_expr.args) == 2:
+            arg0_name = state.inspect.mem_read_expr.args[0]
+            if arg0_name in state.globals["sym_mem"]:
+                state.globals["sym_mem"][arg0_name].append((hex(state.inspect.instruction), state.inspect.mem_read_address))
+                if debug:
+                    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
 
-    def print_reg_read(state):
-        reg_offset = state.inspect.reg_write_offset  # Get the register offset
-        reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
-        print("Write", state.inspect.reg_write_expr, "to", reg_name)
+    def add_sym_mem(state):
+        state.globals["sym_mem"][state.inspect.symbolic_name] = []
 
-    def print_addr(state):
-        print(hex(state.inspect.instruction))
-
-    # state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
-    # state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
-    # state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
-    # state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
-    # state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
+    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=add_sym_mem)
+    state.inspect.b("mem_read", when=angr.BP_AFTER, action=sym_mem_read)
     state.memory.unconstrained_use_addr = True
 
     sm = p.factory.simgr(state)
