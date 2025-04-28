@@ -334,28 +334,11 @@ def exec_func(p: angr.Project,
 
     state = make_registers_symbolic(p, state, chunk_size=4)
 
-    # Create customize traces of symbolic pointers
-    state.globals["sym_mem"] = {}
-
     # For debug printing
     if verbose:
         set_debug_inspect(state)
-
-    def symmem_read(state):
-        if len(state.inspect.mem_read_expr.args) == 2:
-            arg0_name = state.inspect.mem_read_expr.args[0]
-            if arg0_name in state.get_plugin("sym_mem").data:
-                state.get_plugin("sym_mem").data[arg0_name].append((hex(state.inspect.instruction), state.inspect.mem_read_address))
-                #if verbose:
-                #    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
-
-    def add_symmem(state):
-        state.get_plugin("sym_mem").data[state.inspect.symbolic_name] = []
-
-
-    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=add_symmem)
-    state.inspect.b("mem_read", when=angr.BP_AFTER, action=symmem_read)
     
+    # Create sym_mem as plugin so that it can be deep-copied when state forks
     class SymMapPlugin(angr.SimStatePlugin):
         def __init__(self, data=None):
             super().__init__()
@@ -366,7 +349,22 @@ def exec_func(p: angr.Project,
 
     state.register_plugin('sym_mem', SymMapPlugin())
 
-    state.memory.unconstrained_use_addr = True
+    # Mapping 
+    def symmem_add(state):
+        state.get_plugin("sym_mem").data[state.inspect.symbolic_name] = []
+
+    def symmem_set(state):
+        if len(state.inspect.mem_read_expr.args) == 2:
+            arg0_name = state.inspect.mem_read_expr.args[0]
+            if arg0_name in state.get_plugin("sym_mem").data:
+                state.get_plugin("sym_mem").data[arg0_name].append((hex(state.inspect.instruction), state.inspect.mem_read_address))
+                #if verbose:
+                #    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
+
+    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=symmem_add)
+    state.inspect.b("mem_read", when=angr.BP_AFTER, action=symmem_set)
+
+    #state.memory.unconstrained_use_addr = True
 
     sm = p.factory.simgr(state)
 
