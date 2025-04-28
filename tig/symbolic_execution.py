@@ -2,6 +2,7 @@ import pypcode, archinfo, angr, claripy
 from typing import List
 from tig.bininfo import Function
 import logging
+import copy
 
 logging.getLogger("angr").setLevel(logging.ERROR)
 logging.getLogger("claripy").setLevel(logging.ERROR)
@@ -51,9 +52,9 @@ class StashMonitor(angr.exploration_techniques.ExplorationTechnique):
 
     def step(self, simgr, stash="active", **kwargs):
         # Print pre-step information
-        if self.verbose:
-            print("\nBefore step:")
-            self._print_stashes(simgr)
+        #if self.verbose:
+        #    print("\nBefore step:")
+        #    self._print_stashes(simgr)
 
         # Execute the step
         simgr = simgr.step(stash=stash, **kwargs)
@@ -282,24 +283,32 @@ def set_debug_inspect(state: angr.SimState) -> None:
               "\n\tResult:", result,
               )
 
-    state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
-    state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
-    state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
-    state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
-    state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
-    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=print_symvar)
-    state.inspect.b("address_concretization", when=angr.BP_AFTER, action=print_con)
+    def print_exit(state):
+        print("*", hex(state.inspect.instruction), "->", hex(state.inspect.exit_target))
+        guard = state.inspect.exit_guard.__repr__()
+        if len(guard) > 150:
+            guard = guard[:150] + "..."
+        print("\t", state.inspect.exit_jumpkind, guard)
+
+    state.inspect.b("exit", when=angr.BP_AFTER, action=print_exit)
+    #state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
+    #state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
+    #state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
+    #state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
+    #state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
+    #state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=print_symvar)
+    #state.inspect.b("address_concretization", when=angr.BP_AFTER, action=print_con)
 
 
 def exec_func(p: angr.Project, 
               func: Function, 
-              debug: bool = False) -> List[claripy.ast.bool.Bool]:
+              verbose: bool = False) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
 
     Args:
         p (angr.Project): Project for target binary
         func (Function): Function to run
-        degug (bool): debug printing
+        verbose (bool): debug printing
 
     Returns:
         List[claripy.ast.bool.Bool]: Constraints corresponding to control-flow paths through the function
@@ -329,27 +338,44 @@ def exec_func(p: angr.Project,
     state.globals["sym_mem"] = {}
 
     # For debug printing
-    if debug:
+    if verbose:
         set_debug_inspect(state)
 
-    def sym_mem_read(state):
+    def symmem_read(state):
         if len(state.inspect.mem_read_expr.args) == 2:
             arg0_name = state.inspect.mem_read_expr.args[0]
-            if arg0_name in state.globals["sym_mem"]:
-                state.globals["sym_mem"][arg0_name].append((hex(state.inspect.instruction), state.inspect.mem_read_address))
-                if debug:
-                    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
+            if arg0_name in state.get_plugin("sym_mem").data:
+                state.get_plugin("sym_mem").data[arg0_name].append((hex(state.inspect.instruction), state.inspect.mem_read_address))
+                #if verbose:
+                #    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
 
-    def add_sym_mem(state):
-        state.globals["sym_mem"][state.inspect.symbolic_name] = []
+    def add_symmem(state):
+        state.get_plugin("sym_mem").data[state.inspect.symbolic_name] = []
 
-    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=add_sym_mem)
-    state.inspect.b("mem_read", when=angr.BP_AFTER, action=sym_mem_read)
+
+    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=add_symmem)
+    state.inspect.b("mem_read", when=angr.BP_AFTER, action=symmem_read)
+    
+    class SymMapPlugin(angr.SimStatePlugin):
+        def __init__(self, data=None):
+            super().__init__()
+            self.data = data or {}
+
+        def copy(self, memo):
+            return SymMapPlugin(copy.deepcopy(self.data))
+
+    state.register_plugin('sym_mem', SymMapPlugin())
+
     state.memory.unconstrained_use_addr = True
 
     sm = p.factory.simgr(state)
 
     regions = [(func.entry_point, ret) for ret in func.return_addrs]
+    if verbose:
+        print("Entry:", hex(func.entry_point))
+        print("Regions:", [f"({hex(a)}, {hex(b)})" for a,b in regions])
+        print()
+
     in_regions = lambda addr: any([e <= addr <= r for e, r in regions])
     cfg = p.analyses.CFGFast()
     f = cfg.kb.functions.function(name=func.name)
@@ -362,21 +388,32 @@ def exec_func(p: angr.Project,
 
     sm.explore(
         find=func.return_addrs,
-        # avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
+        #avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
+        avoid=[0x800013d0],
         num_find=100,
     )
     # sm.step()
 
-    def dedup_constraints(constraint_list):
+    def dedup_constraints(constraint_sets):
         out = []
         seen = set()
-        for c in constraint_list:
+        for addr, c, sym_mem in constraint_sets:
             if str(c) not in seen:
                 seen.add(repr(c))
-                out.append(c)
+                new_sym_mem = {}
+                for sym, ptr in sym_mem.items():
+                    if not ptr:
+                        continue
+                    # TODO: I believe we only need to keep the last update
+                    #if len(ptr) > 1:
+                    #    raise NotImplementedError("More than one sym mem mapping. Check!")
+                    new_sym_mem[sym] = ptr[-1][1]
+                out.append((addr, c, new_sym_mem))
         return out
 
     for s in sm.active + sm.found:
         s.solver.simplify()
 
-    return dedup_constraints([s.solver.constraints for s in sm.found])
+    return dedup_constraints([(s.addr, 
+                               s.solver.constraints, 
+                               s.get_plugin("sym_mem").data ) for s in sm.found] )

@@ -164,10 +164,14 @@ def generate_timing_invariants(bin_path: str, func: Function) -> Dict[int, str]:
     # For each node
 
     p = get_project(bin_path)
-    f = exec_func(p, func)
+    f = exec_func(p, func, verbose=True)
     with open("paths.txt", "w") as file:
-        for x in f:
-            file.write(f"{x}\n")
+        for addr, c, sym_mem in f:
+            file.write(f"- {hex(addr)}\n")
+            file.write(f"{c}\n")
+            for sym,ptr in sym_mem.items():
+                file.write(f" - {sym}: {ptr}\n")
+            file.write("\n")
     # for block in func:
     #     print(f"====={block.start_vaddr}=====")
     #     print(exec_bb(p, block, []))

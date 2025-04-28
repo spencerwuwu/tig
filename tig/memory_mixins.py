@@ -1,5 +1,5 @@
 
-""" Overwrite PagedMemoryMixin to always(?) use symbolic memroy pointers """
+""" Overwrite PagedMemoryMixin.load to always(?) use symbolic memroy pointers """
 from angr.storage.memory_mixins.paged_memory.paged_memory_mixin import PagedMemoryMixin
 from angr.storage.memory_mixins.paged_memory.pages.cooperation import SimMemoryObject
 
@@ -18,9 +18,9 @@ def symmem_load(self, addr: int, size: int | None = None, *, endness=None, **kwa
     pageno, pageoff = self._divide_addr(addr)
 
     if kwargs["condition"] is not None:
-        from claripy.ast.base import Base
         cond = kwargs["condition"]
-        match_mem = None
+        from claripy.ast.base import Base
+        match_mem = False
         for child in cond.children_asts():
             if not isinstance(child.args[0], Base):
                 if isinstance(child.args[0], str):
