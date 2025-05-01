@@ -12,7 +12,9 @@ logging.getLogger("cle").setLevel(logging.ERROR)
 # NOTE: Customize memory overwrite
 import tig.memory_mixins
 
-def get_project(bin_path: str, lang: str = "RISCV:LE:32:default") -> angr.Project:
+def get_project(bin_path: str, 
+                base_addr: int,
+                lang: str = "RISCV:LE:32:default") -> angr.Project:
     """Get an angr Project using pypcode
 
     Args:
@@ -40,7 +42,12 @@ def get_project(bin_path: str, lang: str = "RISCV:LE:32:default") -> angr.Projec
 
     pcode_arch = archinfo.ArchPcode(sparc_lang)
 
-    return angr.Project(bin_path, arch=pcode_arch, auto_load_libs=False)
+    return angr.Project(bin_path, 
+                        arch=pcode_arch, 
+                        load_options={'auto_load_libs': False, 
+                                      'main_opts': {'base_addr': base_addr}
+                                      }
+                        )
 
 
 class StashMonitor(angr.exploration_techniques.ExplorationTechnique):
@@ -245,7 +252,46 @@ class TIGSimplify(angr.exploration_techniques.ExplorationTechnique):
         return simgr
 
 
+class NonTermAvoid(angr.exploration_techniques.ExplorationTechnique):
+    """ Directly remove a state if calling non-terminated functions """
+
+    def __init__(self, non_term_funcs=[], verbose=True):
+        super().__init__()
+        self.verbose = verbose
+        self.non_term_funcs = non_term_funcs
+
+
+    def step(self, simgr, stash="active", **kwargs):
+        # Execute the step
+        simgr = simgr.step(stash=stash, **kwargs)
+
+        for state in simgr.stashes.get(stash, []):
+            self._attach_hook(state)
+
+        simgr.move(
+            from_stash=stash,
+            to_stash='avoid',
+            filter_func=lambda s: s.globals.get('move_to_avoid', False)
+        )
+
+        return simgr
+    
+    def _attach_hook(self, state):
+        if state.globals.get('hook_attached'):
+            return
+        state.globals['hook_attached'] = True
+
+        def check_calling_non_term(state):
+            addr = state.solver.eval(state.inspect.function_address)
+            if addr in self.non_term_funcs:
+                print("+ killing", hex(addr))
+                state.globals['move_to_avoid'] = True
+
+        state.inspect.b("call", when=angr.BP_BEFORE, action=check_calling_non_term)
+
+
 def set_debug_inspect(state: angr.SimState) -> None:
+    """ Debug print """
     def print_mem_write(state):
         print(
             " MEM Write", state.inspect.mem_write_expr, "to", state.inspect.mem_write_address
@@ -302,12 +348,14 @@ def set_debug_inspect(state: angr.SimState) -> None:
 
 def exec_func(p: angr.Project, 
               func: Function, 
+              non_term_funcs: List[int], 
               verbose: bool = False) -> List[claripy.ast.bool.Bool]:
     """Symbolically executes a function and computes input constraints
 
     Args:
         p (angr.Project): Project for target binary
         func (Function): Function to run
+        non_term_funcs (List[int]): list of non-terminated function addresses
         verbose (bool): debug printing
 
     Returns:
@@ -322,9 +370,6 @@ def exec_func(p: angr.Project,
             # angr.options.LAZY_SOLVES, # TODO: Maybe helpful?
             angr.options.CACHELESS_SOLVER,
             angr.options.CALLLESS,
-            # angr.options.AVOID_MULTIVALUED_READS,
-            # angr.options.SYMBOLIC_WRITE_ADDRESSES,
-            # angr.options.CONSERVATIVE_READ_STRATEGY,
             angr.options.SYMBOLIC_INITIAL_VALUES,
             angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY
         },
@@ -376,18 +421,20 @@ def exec_func(p: angr.Project,
 
     in_regions = lambda addr: any([e <= addr <= r for e, r in regions])
     cfg = p.analyses.CFGFast()
-    f = cfg.kb.functions.function(name=func.name)
-    if f is None:
-        print("Can't find function", func.name)
-        return set()
+    #f = cfg.kb.functions.function(name=func.name)
+    #if f is None:
+    #    print("Can't find function", func.name)
+    #    return set()
     sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
+    # NonTermAvoid check and move states to avoid, must come first
+    sm.use_technique(NonTermAvoid(non_term_funcs))
     sm.use_technique(StashMonitor())
     sm.use_technique(TIGSimplify())
 
     sm.explore(
         find=func.return_addrs,
-        #avoid=(lambda s: not (in_regions(s.addr))), # change this eventually, we do want function calls but we want to step over them if possible
-        avoid=[0x800013d0],
+        # change this eventually, we do want function calls but we want to step over them if possible
+        avoid=(lambda s: not (in_regions(s.addr))), 
         num_find=100,
     )
     # sm.step()
