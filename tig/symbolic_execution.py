@@ -132,6 +132,7 @@ def make_registers_symbolic(
     return state
 
 
+# NOTE: can be replaced with OpBehaviorLzcount overwrite in memory_mixins
 def is_clz(expr):
     """Determines if a given claripy AST expression implements a Count Leading Zeros (CLZ) operation.
 
@@ -198,6 +199,7 @@ def is_clz(expr):
         return None
 
 
+# NOTE: can be replaced with OpBehaviorLzcount overwrite in memory_mixins
 def replace_clz(expr):
     new_vars = []
     args = list(expr.args)  # Copy to avoid modifying the tuple directly
@@ -219,6 +221,7 @@ def replace_clz(expr):
     return expr, []
 
 
+# NOTE: can be replaced with OpBehaviorLzcount overwrite in memory_mixins
 class TIGSimplify(angr.exploration_techniques.ExplorationTechnique):
     """Exploration technique that simplifies constraints as steps occur"""
 
@@ -402,7 +405,7 @@ def exec_func(p: angr.Project,
         if len(state.inspect.mem_read_expr.args) == 2:
             arg0_name = state.inspect.mem_read_expr.args[0]
             if arg0_name in state.get_plugin("sym_mem").data:
-                state.get_plugin("sym_mem").data[arg0_name].append((hex(state.inspect.instruction), state.inspect.mem_read_address))
+                state.get_plugin("sym_mem").data[arg0_name].append((hex(state.inspect.instruction), copy.deepcopy(state.inspect.mem_read_address)))
                 #if verbose:
                 #    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
 
@@ -429,7 +432,9 @@ def exec_func(p: angr.Project,
     # NonTermAvoid check and move states to avoid, must come first
     sm.use_technique(NonTermAvoid(non_term_funcs))
     sm.use_technique(StashMonitor())
-    sm.use_technique(TIGSimplify())
+
+    # NOTE: replaced with OpBehaviorLzcount overwrite in memory_mixins
+    #sm.use_technique(TIGSimplify())
 
     sm.explore(
         find=func.return_addrs,

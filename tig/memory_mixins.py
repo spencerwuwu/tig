@@ -48,5 +48,14 @@ def symmem_load(self, addr: int, size: int | None = None, *, endness=None, **kwa
 PagedMemoryMixin.load = symmem_load
 
 
+""" Overwrite Pcode's clz handler """
+from angr.engines.pcode.behavior import OpBehaviorLzcount
+from claripy.ast.bv import BV, BVS
 
+orig_evaluate_unary = OpBehaviorLzcount.evaluate_unary
 
+def sym_eval_lzcount(self, size_out: int, size_in: int, in1: BV) -> BV:
+    extracted_expr,_ = in1.args
+    return BVS("CLZ_{"+extracted_expr+"}", size_out * 8)
+
+OpBehaviorLzcount.evaluate_unary = sym_eval_lzcount
