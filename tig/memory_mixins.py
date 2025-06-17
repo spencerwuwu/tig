@@ -24,7 +24,8 @@ def symmem_load(self, addr: int, size: int | None = None, *, endness=None, **kwa
         for child in cond.children_asts():
             if not isinstance(child.args[0], Base):
                 if isinstance(child.args[0], str):
-                    if child.args[0].startswith("mem_"):
+                    if child.args[0].startswith("mem_") or\
+                        child.args[0].startswith("reg_"):
                         match_mem = True
                         break
         if match_mem:
