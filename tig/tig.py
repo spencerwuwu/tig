@@ -170,17 +170,18 @@ def generate_timing_invariants(bin_path: str,
     p = get_project(bin_path, base_addr)
     f = exec_func(p, func, no_term_func_addrs, verbose=True)
     with open("paths.txt", "w") as file:
+        file.write("Function: " + func.name + "\n\n")
         for result in f:
-            file.write(f"- {hex(result['end_address'])}\n")
-            file.write(f"   traces:")
+            file.write(f"- Reached block: {hex(result['end_address'])}\n")
+            file.write(f"  * Traces:\n      ")
             file.write(", ".join(f"0x{x:x}" for x in result["history"]))
             file.write("\n")
-            file.write(f"  path constraints:\n")
+            file.write(f"  * Path constraints:\n")
             for c in result["path_constraints"]:
-                file.write(f"    {c}\n")
-            file.write(f"  memory regions:\n")
+                file.write(f"      {c}\n")
+            file.write(f"  * Memory regions:\n")
             for m in result["memory_regions"]:
-                file.write(f"    {m}\n")
+                file.write(f"      {m}\n")
             file.write("\n")
             file.write("\n")
     # for block in func:

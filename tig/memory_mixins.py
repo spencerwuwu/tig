@@ -22,6 +22,39 @@ from angr import SimStatePlugin
 from claripy.operations import infix, prefix
 
 class SymMemPlugin(SimStatePlugin):
+    """ Plugin to track symbolic memory references, path constraints (and more!)
+
+    Args:
+        symbolic_references: { <symbolic_var:str>: <symbolic_var:addr> }
+        constraints:         [<path_constraint:str>]
+        history:             { <bb_addr>: [<TODO_info>] }
+        memory_regions:      { <symbolic_addr:str>: {"read":  [<instr_addr:int>],
+                                                     "write": [<instr_addr:int>]
+                                                    }
+                             }
+                                    
+    Functions:
+    - get_repr(entry: BV) -> str
+        * Get a string representation of a symbolic value.
+
+    - record_memory_read(instr_addr: int, symbolic_addr: BV, symbolic_value: BV) -> str
+        * Updates `memory_regions`
+        * Record a memory read for address <repr(symbolic_addr)> at <instr_addr> 
+        * Map symbolic_references[symbolic_value: str] = <symbolic_addr: str> .
+        * Hooked to state.inspect.b("mem_read")
+        
+    - record_write_read(instr_addr: int, symbolic_addr: BV, symbolic_value: BV) -> str
+        * Updates `memory_regions`
+        * Record a memory write to address <repr(symbolic_addr)> at <instr_addr> 
+        * Hooked to state.inspect.b("mem_write")
+
+    - get_constraint_reprs(constraints: List[BV])-> List[str]:
+        * get_repr for list of BV constraints (from `s.solver.constraints`) 
+
+    - record_constraint(constraints: Tuple[BV])-> List[str]:
+        * Record a constraint in `path_constraints` if it is not already present.
+        * Hooked to state.inspect.b("constraints")
+    """
     def __init__(self, 
                  symbolic_references={}, 
                  constraints=[],
@@ -99,56 +132,3 @@ class SymMemPlugin(SimStatePlugin):
                 self.path_constraints.append(repr)
             ret.append(repr)
         return ret
-
-
-
-# NOTE: (legacy?) we can just use AVOID_MULTIVALUED_READS (?)
-# """ Overwrite PagedMemoryMixin.load to always(?) use symbolic memroy pointers """
-#from angr.storage.memory_mixins.paged_memory.paged_memory_mixin import PagedMemoryMixin
-#from angr.storage.memory_mixins.paged_memory.pages.cooperation import SimMemoryObject
-#
-#orig_load = PagedMemoryMixin.load
-#
-#def symmem_load(self, addr: int, size: int | None = None, *, endness=None, **kwargs):
-#    if endness is None:
-#        endness = self.endness
-#
-#    if not isinstance(size, int):
-#        raise TypeError("Need size to be resolved to an int by this point")
-#
-#    if not isinstance(addr, int):
-#        raise TypeError("Need addr to be resolved to an int by this point")
-#
-#    pageno, pageoff = self._divide_addr(addr)
-#
-#    if kwargs["condition"] is not None:
-#        cond = kwargs["condition"]
-#        from claripy.ast.base import Base
-#        match_mem = False
-#        for child in cond.children_asts():
-#            if not isinstance(child.args[0], Base):
-#                if isinstance(child.args[0], str):
-#                    if child.args[0].startswith("mem_") or\
-#                        child.args[0].startswith("reg_"):
-#                        match_mem = True
-#                        break
-#        if match_mem:
-#            page_addr = pageno * self.page_size
-#            page = self._get_page(pageno, False, **kwargs)
-#            global_start_addr = page_addr + addr + size
-#            new_ast = self._default_value(
-#                global_start_addr,
-#                size,  # pylint: disable=assignment-from-no-return
-#                key=(self.category, global_start_addr),
-#                memory=self,
-#                endness=endness,
-#                **kwargs,
-#            )
-#            new_item = SimMemoryObject(new_ast, global_start_addr, endness=endness)
-#            page.symbolic_data[global_start_addr - page_addr] = new_item
-#            out = self.PAGE_TYPE._compose_objects([[(global_start_addr, new_item)]], size, endness, memory=self, **kwargs)
-#            return out
-#    return orig_load(self, addr=addr, size=size, **kwargs)
-#
-#PagedMemoryMixin.load = symmem_load
-
