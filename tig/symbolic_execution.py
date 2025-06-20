@@ -5,12 +5,14 @@ import logging
 import copy
 
 logging.getLogger("angr").setLevel(logging.ERROR)
+logging.getLogger("ailment").setLevel(logging.ERROR)
 logging.getLogger("claripy").setLevel(logging.ERROR)
 logging.getLogger("pyvex").setLevel(logging.ERROR)
 logging.getLogger("cle").setLevel(logging.ERROR)
 
-# NOTE: Customize memory overwrite
+# NOTE: Customize memory overwrite and CLZ
 import tig.memory_mixins
+from tig.memory_mixins import SymMemPlugin
 
 def get_project(bin_path: str, 
                 base_addr: int,
@@ -101,17 +103,15 @@ def make_static_memory_symbolic(
 
     # Process .data section
     for addr in range(data_section.min_addr, data_section.max_addr, chunk_size):
-        sym_name = f"data_{hex(addr)}"
+        sym_name = f"data_init_{hex(addr)}"
         symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
         state.memory.store(addr, symbolic_value)
 
     # Process .bss section
     for addr in range(bss_section.min_addr, bss_section.max_addr, chunk_size):
-        sym_name = f"bss_{hex(addr)}"
+        sym_name = f"bss_init_{hex(addr)}"
         symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
         state.memory.store(addr, symbolic_value)
-
-    return state
 
 
 def make_registers_symbolic(
@@ -126,10 +126,9 @@ def make_registers_symbolic(
         offset, size_bytes = arch.registers[reg_name]
         size_bits = size_bytes * 8
 
-        sym_val = claripy.BVS(f"reg_{reg_name}", size_bits)
+        sym_val = claripy.BVS(f"reg_init_{reg_name}", size_bits)
         # Write symbolic value to register
         state.registers.store(reg_name, sym_val)
-    return state
 
 
 # NOTE: can be replaced with OpBehaviorLzcount overwrite in memory_mixins
@@ -293,44 +292,69 @@ class NonTermAvoid(angr.exploration_techniques.ExplorationTechnique):
         state.inspect.b("call", when=angr.BP_BEFORE, action=check_calling_non_term)
 
 
-def set_debug_inspect(state: angr.SimState) -> None:
-    """ Debug print """
-    def print_mem_write(state):
-        print(
-            " MEM Write", state.inspect.mem_write_expr, "to", state.inspect.mem_write_address
-        )
+def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
+    state.register_plugin('sym_mem', SymMemPlugin())
 
-    def print_reg_write(state):
+    # Mapping 
+    def symmem_add(state):
+        if verbose:
+            print(" + NEW", state.inspect.symbolic_name)
+        state.get_plugin("sym_mem").symbolic_references[state.inspect.symbolic_name] = None
+
+    def symmem_mem_read(state):
+        repr = state.get_plugin("sym_mem").record_memory_read(state.inspect.instruction, state.inspect.mem_read_address, state.inspect.mem_read_expr)
+        if verbose:
+            print(" MEM Read ", state.inspect.mem_read_expr, "from:", repr)
+            print(f"               ({state.inspect.mem_read_address})")
+
+    def symmem_mem_write(state):
+        repr = state.get_plugin("sym_mem").record_memory_write(state.inspect.instruction, state.inspect.mem_write_address)
+        if verbose:
+            print(" MEM Write", state.inspect.mem_write_expr, "to:", repr)
+            print(f"               ({state.inspect.mem_write_address})")
+
+    def skip_memory_constraints(state):
+        state.inspect.address_concretization_add_constraints = False
+        if verbose:
+            print("   Skip adding:", state.inspect.address_concretization_expr)
+
+    def symmem_path_constraint(state):
+        reprs = state.get_plugin("sym_mem").record_constraint(state.inspect.added_constraints)
+        if verbose:
+            print(" Constraints:", reprs)
+            print(f"               ({state.inspect.added_constraints})")
+
+    def symmem_reg_write(state):
         reg_offset = state.inspect.reg_write_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
-        print(" REG Write", state.inspect.reg_write_expr, "to", reg_name)
+        if verbose:
+            print(" REG Write", state.inspect.reg_write_expr, "to", reg_name)
 
-    def print_mem_read(state):
-        print(" MEM Read ", state.inspect.mem_read_expr, "from", state.inspect.mem_read_address)
-
-    def print_reg_read(state):
+    def symmem_reg_read(state):
         reg_offset = state.inspect.reg_read_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
-        print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
+        if verbose:
+            print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
 
-    def print_addr(state):
-        print("->", hex(state.inspect.instruction))
+    def record_addr(state):
+        if verbose:
+            print("->", hex(state.inspect.instruction))
+        # TODO: May be useful for fine-grained records
+        state.get_plugin("sym_mem").history[state.inspect.instruction] = []
 
-    def print_symvar(state):
-        print(" + NEW", state.inspect.symbolic_name)
 
-    def print_con(state):
-        con_result = state.inspect.address_concretization_result
-        if con_result is None:
-            result = "-"
-        else:
-            result = "[" + ",".join(hex(e) for e in con_result) + "]"
-        #print(state.solver.symbolic(state.inspect.address_concretization_expr))
-        print(" + CONCRETIZE:",
-              "\n\tStrategy:", state.inspect.address_concretization_strategy,
-              #"\n\tConcre Expr:", state.inspect.address_concretization_expr,
-              "\n\tResult:", result,
-              )
+    state.inspect.b("instruction", when=angr.BP_BEFORE, action=record_addr)
+    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=symmem_add)
+    state.inspect.b("mem_read", when=angr.BP_AFTER, action=symmem_mem_read)
+    state.inspect.b("mem_write", when=angr.BP_AFTER, action=symmem_mem_write)
+    state.inspect.b('address_concretization', when=angr.BP_BEFORE, action=skip_memory_constraints)
+    state.inspect.b("constraints", when=angr.BP_AFTER, action=symmem_path_constraint)
+    state.inspect.b("reg_read", when=angr.BP_AFTER, action=symmem_reg_read)
+    state.inspect.b("reg_write", when=angr.BP_AFTER, action=symmem_reg_write)
+
+
+def set_debug_inspect(state: angr.SimState) -> None:
+    """ Debug print """
 
     def print_exit(state):
         print("*", hex(state.inspect.instruction), "->", hex(state.inspect.exit_target))
@@ -340,13 +364,6 @@ def set_debug_inspect(state: angr.SimState) -> None:
         print("\t", state.inspect.exit_jumpkind, guard)
 
     state.inspect.b("exit", when=angr.BP_AFTER, action=print_exit)
-    #state.inspect.b("instruction", when=angr.BP_BEFORE, action=print_addr)
-    #state.inspect.b("mem_write", when=angr.BP_AFTER, action=print_mem_write)
-    #state.inspect.b("reg_write", when=angr.BP_AFTER, action=print_reg_write)
-    #state.inspect.b("mem_read", when=angr.BP_AFTER, action=print_mem_read)
-    #state.inspect.b("reg_read", when=angr.BP_AFTER, action=print_reg_read)
-    #state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=print_symvar)
-    #state.inspect.b("address_concretization", when=angr.BP_AFTER, action=print_con)
 
 
 def exec_func(p: angr.Project, 
@@ -372,47 +389,22 @@ def exec_func(p: angr.Project,
         add_options={
             # angr.options.LAZY_SOLVES, # TODO: Maybe helpful?
             angr.options.CACHELESS_SOLVER,
+            angr.options.AVOID_MULTIVALUED_READS, # This creates new symbolic value when dereferencing address with symbolic values
             angr.options.CALLLESS,
             angr.options.SYMBOLIC_INITIAL_VALUES,
             angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY
         },
     )
 
-    state = make_static_memory_symbolic(p, state, chunk_size=4)
+    make_static_memory_symbolic(p, state, chunk_size=4)
 
-    state = make_registers_symbolic(p, state, chunk_size=4)
+    make_registers_symbolic(p, state, chunk_size=4)
+
+    hook_symmem(state, verbose)
 
     # For debug printing
     if verbose:
         set_debug_inspect(state)
-    
-    # Create sym_mem as plugin so that it can be deep-copied when state forks
-    class SymMapPlugin(angr.SimStatePlugin):
-        def __init__(self, data=None):
-            super().__init__()
-            self.data = data or {}
-
-        def copy(self, memo):
-            return SymMapPlugin(copy.deepcopy(self.data))
-
-    state.register_plugin('sym_mem', SymMapPlugin())
-
-    # Mapping 
-    def symmem_add(state):
-        state.get_plugin("sym_mem").data[state.inspect.symbolic_name] = []
-
-    def symmem_set(state):
-        if len(state.inspect.mem_read_expr.args) == 2:
-            arg0_name = state.inspect.mem_read_expr.args[0]
-            if arg0_name in state.get_plugin("sym_mem").data:
-                state.get_plugin("sym_mem").data[arg0_name].append((hex(state.inspect.instruction), copy.deepcopy(state.inspect.mem_read_address)))
-                #if verbose:
-                #    print(f"  - SYM_MEM: {arg0_name} -> {state.inspect.mem_read_address}" )
-
-    state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=symmem_add)
-    state.inspect.b("mem_read", when=angr.BP_AFTER, action=symmem_set)
-
-    #state.memory.unconstrained_use_addr = True
 
     sm = p.factory.simgr(state)
 
@@ -431,7 +423,7 @@ def exec_func(p: angr.Project,
     sm.use_technique(angr.exploration_techniques.LoopSeer(cfg=cfg, bound=5))
     # NonTermAvoid check and move states to avoid, must come first
     sm.use_technique(NonTermAvoid(non_term_funcs))
-    sm.use_technique(StashMonitor())
+    sm.use_technique(StashMonitor(verbose))
 
     # NOTE: replaced with OpBehaviorLzcount overwrite in memory_mixins
     #sm.use_technique(TIGSimplify())
@@ -444,26 +436,22 @@ def exec_func(p: angr.Project,
     )
     # sm.step()
 
-    def dedup_constraints(constraint_sets):
-        out = []
-        seen = set()
-        for addr, c, sym_mem in constraint_sets:
-            if str(c) not in seen:
-                seen.add(repr(c))
-                new_sym_mem = {}
-                for sym, ptr in sym_mem.items():
-                    if not ptr:
-                        continue
-                    # TODO: I believe we only need to keep the last update
-                    #if len(ptr) > 1:
-                    #    raise NotImplementedError("More than one sym mem mapping. Check!")
-                    new_sym_mem[sym] = ptr[-1][1]
-                out.append((addr, c, new_sym_mem))
-        return out
-
-    for s in sm.active + sm.found:
-        s.solver.simplify()
-
-    return dedup_constraints([(s.addr, 
-                               s.solver.constraints, 
-                               s.get_plugin("sym_mem").data ) for s in sm.found] )
+    # NOTE: Currently I just return angr's default history
+    #       for the traversed blocks of each trace.
+    #       Alternatively, we can potentially collect more fine-grained
+    #       info with sym_mem's history>
+    #       We can also cover the constraints at the end, 
+    #       but I'm not sure if there's anything that changes
+    #       for the symbolic variable expansion.
+    #
+    #   "history": s.get_plugin("sym_mem").history, 
+    #   "path_constraints": s.get_plugin("sym_mem").get_constraint_reprs(s.solver.constraints)        
+    results = []
+    for s in sm.found:
+        results.append({
+            "end_address": s.addr,
+            "history": list(s.history.bbl_addrs), 
+            "memory_regions": list(s.get_plugin("sym_mem").memory_regions.keys()),
+            "path_constraints": s.get_plugin("sym_mem").path_constraints,
+        })
+    return results

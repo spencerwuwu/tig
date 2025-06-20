@@ -26,6 +26,7 @@ def basic_extract_bb(binary_path: str) -> List[Dict[str, Any]]:
             [
                 "docker",
                 "run",
+                "--platform linux/amd64",
                 "-dt",
                 "-v",
                 f"{bin_dir}:/samples",
