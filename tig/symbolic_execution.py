@@ -1,5 +1,5 @@
 import pypcode, archinfo, angr, claripy
-from typing import List
+from typing import List, Dict
 from tig.bininfo import Function
 import logging
 
@@ -211,14 +211,19 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
 
     def skip_memory_constraints(state):
         state.inspect.address_concretization_add_constraints = False
-        if verbose:
-            print("   Skip adding:", state.inspect.address_concretization_expr)
+        # NOTE: Don't check memory constraints for symbolic addresses
+        #if verbose:
+        #    c = str(state.inspect.address_concretization_expr)
+        #    if len(c) > 20:
+        #        c = c[:20] + "..."
+        #    print("   Skip adding:", c)
 
     def symmem_path_constraint(state):
-        reprs = state.get_plugin("sym_mem").record_constraint(state.inspect.added_constraints)
-        if verbose:
-            print(" Constraints:", reprs)
-            print(f"               ({state.inspect.added_constraints})")
+        repr = state.get_plugin("sym_mem").record_path_constraint(list(state.history.bbl_addrs), state.inspect.added_constraints)
+        if repr is not None and verbose:
+            if not repr.startswith(" (x Recorded)"):
+                print(" Path constraint:", repr)
+                print(f"                  ({state.inspect.added_constraints})")
 
     def symmem_reg_write(state):
         reg_offset = state.inspect.reg_write_offset  # Get the register offset
@@ -232,9 +237,22 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
         if verbose:
             print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
 
+    def symmem_exit(state):
+        #if state.inspect.exit_jumpkind == "Ijk_Boring":
+        jmp_target = state.inspect.exit_target
+        guard = state.inspect.exit_guard
+        cn = state.get_plugin("sym_mem").record_branch_jump(list(state.history.bbl_addrs), guard, jmp_target)
+        if verbose:
+            print("*", hex(state.inspect.instruction), "->", hex(jmp_target), f"({state.inspect.exit_jumpkind})")
+            print(" Guard", cn)
+            #guard_str = guard.__repr__()
+            #if len(guard_str) > 150:
+            #    guard = guard[:150] + "..."
+            #print("\t", state.inspect.exit_jumpkind, guard)
+
     def record_addr(state):
         if verbose:
-            print("->", hex(state.inspect.instruction))
+            print("\n->", hex(state.inspect.instruction))
         # TODO: May be useful for fine-grained records
         state.get_plugin("sym_mem").history[state.inspect.instruction] = []
 
@@ -244,28 +262,16 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
     state.inspect.b("mem_write", when=angr.BP_AFTER, action=symmem_mem_write)
     state.inspect.b('address_concretization', when=angr.BP_BEFORE, action=skip_memory_constraints)
     state.inspect.b("constraints", when=angr.BP_AFTER, action=symmem_path_constraint)
+    state.inspect.b("exit", when=angr.BP_AFTER, action=symmem_exit)
     # No operations for register read/write (yet)
     state.inspect.b("reg_read", when=angr.BP_AFTER, action=symmem_reg_read)
     state.inspect.b("reg_write", when=angr.BP_AFTER, action=symmem_reg_write)
 
 
-def set_debug_inspect(state: angr.SimState) -> None:
-    """ Debug print (mostly moved to hook_symmem now) """
-
-    def print_exit(state):
-        print("*", hex(state.inspect.instruction), "->", hex(state.inspect.exit_target))
-        guard = state.inspect.exit_guard.__repr__()
-        if len(guard) > 150:
-            guard = guard[:150] + "..."
-        print("\t", state.inspect.exit_jumpkind, guard)
-
-    state.inspect.b("exit", when=angr.BP_AFTER, action=print_exit)
-
-
 def exec_func(p: angr.Project, 
               func: Function, 
               non_term_funcs: List[int], 
-              verbose: bool = False) -> List[claripy.ast.bool.Bool]:
+              verbose: bool = False) -> List[Dict]:
     """Symbolically executes a function and computes input constraints
 
     Args:
@@ -296,11 +302,6 @@ def exec_func(p: angr.Project,
     make_registers_symbolic(p, state, reg_size=8)
 
     hook_symmem(state, verbose)
-
-    # For debug printing
-    if verbose:
-        # Only prints next-block debug info now, mostly done in hook_symmem
-        set_debug_inspect(state)
 
     sm = p.factory.simgr(state)
 
@@ -337,11 +338,20 @@ def exec_func(p: angr.Project,
     #   "history": s.get_plugin("sym_mem").history, 
     #   "path_constraints": s.get_plugin("sym_mem").get_constraint_reprs(s.solver.constraints)        
     results = []
+
     for s in sm.found:
         results.append({
             "end_address": s.addr,
             "history": list(s.history.bbl_addrs), 
             "memory_regions": list(s.get_plugin("sym_mem").memory_regions.keys()),
             "path_constraints": s.get_plugin("sym_mem").path_constraints,
+            "branch_constraints": s.get_plugin("sym_mem").branch_constraints,
+            "branch_history": s.get_plugin("sym_mem").recorded_history,
         })
+    #s = sm.found[-1]
+    #cns = s.get_plugin("sym_mem").branch_constraints
+    #for cn in cns:
+    #    print(cn.repr)
+    #    print(f"    - True: {hex(cn.true_jmp_target)}, False: {hex(cn.false_jmp_target)}, History: {', '.join(hex(addr) for addr in cn.history)}")
+
     return results

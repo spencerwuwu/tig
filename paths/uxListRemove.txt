@@ -1,0 +1,32 @@
+Function: uxListRemove
+
+- Reached block: 0x80002470
+  * Traces:
+      0x80002440, 0x80002460
+  * Path constraints:
+      mem Ⓓ [mem Ⓓ [reg_init_a0_22245_32 + 0x10] + 0x4] != reg_init_a0_22245_32
+  * Memory regions:
+      reg_init_a0_22245_32 + 0x4
+      reg_init_a0_22245_32 + 0x8
+      reg_init_a0_22245_32 + 0x10
+      mem Ⓓ [reg_init_a0_22245_32 + 0x4] + 0x8
+      mem Ⓓ [reg_init_a0_22245_32 + 0x8] + 0x4
+      mem Ⓓ [reg_init_a0_22245_32 + 0x10] + 0x4
+      mem Ⓓ [reg_init_a0_22245_32 + 0x10]
+
+
+- Reached block: 0x80002470
+  * Traces:
+      0x80002440, 0x8000245c, 0x80002460
+  * Path constraints:
+      mem Ⓓ [mem Ⓓ [reg_init_a0_22245_32 + 0x10] + 0x4] == reg_init_a0_22245_32
+  * Memory regions:
+      reg_init_a0_22245_32 + 0x4
+      reg_init_a0_22245_32 + 0x8
+      reg_init_a0_22245_32 + 0x10
+      mem Ⓓ [reg_init_a0_22245_32 + 0x4] + 0x8
+      mem Ⓓ [reg_init_a0_22245_32 + 0x8] + 0x4
+      mem Ⓓ [reg_init_a0_22245_32 + 0x10] + 0x4
+      mem Ⓓ [reg_init_a0_22245_32 + 0x10]
+
+

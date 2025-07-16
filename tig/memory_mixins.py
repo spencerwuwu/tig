@@ -1,6 +1,7 @@
 
 """ Overwrite Pcode's clz handler """
 from angr.engines.pcode.behavior import OpBehaviorLzcount
+from angr.state_plugins import history
 from claripy.ast.bv import BV, BVS
 
 orig_evaluate_unary = OpBehaviorLzcount.evaluate_unary
@@ -21,12 +22,43 @@ from copy import deepcopy
 from angr import SimStatePlugin
 from claripy.operations import infix, prefix
 
+
+class ConstraintNode():
+    def __init__(self, history: List[int], constraint: BV, repr: str, inv_repr: str):
+        self.history = history
+        self.bvv = constraint
+        self.repr = repr
+        self.inv_repr = inv_repr
+
+        self.true_jmp_target = 0
+        self.false_jmp_target = 0
+
+    def add_jmp_target(self, target: int, branch: bool):
+        if branch:
+            self.true_jmp_target = target
+        else:
+            self.false_jmp_target = target
+
+    def __repr__(self):
+        #return "[" + ", ".join(f"{hex(addr)}" for addr in self.history) + "]:\n\t" + self.repr
+        guard_str = self.repr
+        if len(guard_str) > 150:
+            guard_str = guard_str[:150] + "..."
+        return f"  0x{self.history[-1]:x} => <0x{self.true_jmp_target:x}|0x{self.false_jmp_target:x}>:\n\t" + guard_str
+
+    def __str__(self):
+        #return "[" + ", ".join(f"{hex(addr)}" for addr in self.history) + "]: " + self.repr
+        return f"  0x{self.history[-1]:x} => <0x{self.true_jmp_target:x}|0x{self.false_jmp_target:x}>: " + self.repr
+
+
 class SymMemPlugin(SimStatePlugin):
     """ Plugin to track symbolic memory references, path constraints (and more!)
 
     Args:
         symbolic_references: { <symbolic_var:str>: <symbolic_var:addr> }
-        constraints:         [<path_constraint:str>]
+        path_constraints:    [ <path_constraint:str> ] 
+        branch_constraints:  [ <branch_constraint:ConstraintNode> ]   # shared between states
+        recorded_history:    [ <instr_addr:int> ]   # shared between states
         history:             { <bb_addr>: [<TODO_info>] }
         memory_regions:      { <symbolic_addr:str>: {"read":  [<instr_addr:int>],
                                                      "write": [<instr_addr:int>]
@@ -51,19 +83,23 @@ class SymMemPlugin(SimStatePlugin):
     - get_constraint_reprs(constraints: List[BV])-> List[str]:
         * get_repr for list of BV constraints (from `s.solver.constraints`) 
 
-    - record_constraint(constraints: Tuple[BV])-> List[str]:
+    - record_constraint(constraints: Tuple[BV])-> str | None:
         * Record a constraint in `path_constraints` if it is not already present.
         * Hooked to state.inspect.b("constraints")
     """
     def __init__(self, 
                  symbolic_references={}, 
-                 constraints=[],
+                 path_constraints=[],
+                 branch_constraints=[],
+                 recorded_history=[],
                  history={}, 
                  memory_regions={}):
         super().__init__()
         self.symbolic_references = symbolic_references
         self.history = history
-        self.path_constraints = constraints
+        self.path_constraints = path_constraints
+        self.branch_constraints = branch_constraints
+        self.recorded_history = recorded_history
         self.memory_regions = memory_regions
 
     def record_memory_read(self, instr_addr: int, symbolic_addr: BV, symbolic_value: BV)-> str:
@@ -88,6 +124,8 @@ class SymMemPlugin(SimStatePlugin):
     def copy(self, memo):
         return SymMemPlugin(deepcopy(self.symbolic_references),
                             deepcopy(self.path_constraints),
+                            self.branch_constraints,
+                            self.recorded_history,
                             deepcopy(self.history),
                             deepcopy(self.memory_regions))
 
@@ -121,14 +159,54 @@ class SymMemPlugin(SimStatePlugin):
     def get_constraint_reprs(self, constraints: List[BV])-> List[str]:
         return [self.get_repr(c) for c in constraints]
 
-    def record_constraint(self, constraints: Tuple)-> List[str]:
-        ret = []
-        for c in constraints:
-            # if no variable in c and eval to true, skip
-            if len(c.variables) == 0 and c.is_true():
-                continue
-            repr = self.get_repr(c)
-            if repr not in self.path_constraints:
-                self.path_constraints.append(repr)
-            ret.append(repr)
-        return ret
+    def record_path_constraint(self, history:List[int], constraints: Tuple[BV])-> str | None:
+        c = constraints[0] if len(constraints) == 1 else None
+        if c is None:
+            h = ", ".join(f"{hex(addr)}" for addr in history)
+            raise ValueError(f"Expected a single constraint, got {len(constraints)}: {constraints} for trace {h}")
+
+        # if no variable in c and eval to true, skip
+        if len(c.variables) == 0 and c.is_true():
+            return None
+
+        repr = self.get_repr(c)
+        if repr not in self.path_constraints:
+            self.path_constraints.append(repr)
+            return repr
+        else:
+            return " (x Recorded) " + repr[:5] + "..."
+
+
+    def record_branch_jump(self, history:List[int], guard: BV, jmp_target: int)-> ConstraintNode | None:
+        # if no variable in c and eval to true, skip
+        if len(guard.variables) == 0 and guard.is_true():
+            return None
+
+        repr = self.get_repr(guard)
+        if repr not in self.path_constraints:
+            self.path_constraints.append(repr)
+
+        if history not in self.recorded_history:
+            cn = ConstraintNode(history, guard, repr, self.get_repr(guard.__invert__()))
+            cn.add_jmp_target(jmp_target, True)
+            self.branch_constraints.append(cn)
+            self.recorded_history.append(history)
+            return cn
+        else:
+            target_cn = None
+            for cn in self.branch_constraints:
+                if history == cn.history:
+                    target_cn = cn
+                    break
+            if target_cn is None :
+                # ERROR
+                h = ", ".join(f"{hex(addr)}" for addr in history)
+                raise ValueError(f"Cannot find ConstraintNode for history {h}")
+
+            if target_cn.inv_repr == repr:
+                target_cn.add_jmp_target(jmp_target, False)
+            else:
+                # ERROR
+                h = ", ".join(f"{hex(addr)}" for addr in history)
+                raise NotImplementedError(f"ConstraintNode {repr} misbehave at history {h}")
+        return target_cn

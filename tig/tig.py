@@ -6,6 +6,7 @@ from typing import Tuple, Optional, Dict, List
 from tig.extract_basic_blocks import extract_bb, get_non_terminated_functions
 from tig.bininfo import Instruction, BasicBlock, Function
 from tig.symbolic_execution import get_project, exec_func
+from tig.proof_synthesis import gen_function_time_formula
 
 
 def time_of_riscv_instr(
@@ -150,10 +151,11 @@ def time_of_basic_block(
         return f"{' + '.join(times + [parens(final_time)])}", None
 
 
-def generate_timing_invariants(bin_path: str, 
-                               func: Function,
-                               base_addr: int,
-                               no_term_func_addrs: List[int],
+def symexec_function(bin_path: str, 
+                     func: Function,
+                     base_addr: int,
+                     no_term_func_addrs: List[int],
+                     verbose: bool = False
                                ) -> Dict[int, str]:
     # Start up angr
 
@@ -168,7 +170,9 @@ def generate_timing_invariants(bin_path: str,
     # For each node
 
     p = get_project(bin_path, base_addr)
-    f = exec_func(p, func, no_term_func_addrs, verbose=True)
+    f = exec_func(p, func, no_term_func_addrs, verbose=verbose)
+
+    return f
     with open("paths.txt", "w") as file:
         file.write("Function: " + func.name + "\n\n")
         for result in f:
@@ -232,7 +236,8 @@ def main():
 
     base_addr = data[0]["blocks"][0]["bb_start_vaddr"]
 
-    invs = generate_timing_invariants(args.bin, func, base_addr, no_term_func_addrs)
+    results = symexec_function(args.bin, func, base_addr, no_term_func_addrs, verbose=False)
+    func_time = gen_function_time_formula(func, results, verbose=True)
 
     # invs = rocq_of_invariants(args.func, invs)
     # if args.out_file is None:

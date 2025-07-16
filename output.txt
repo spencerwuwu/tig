@@ -1,0 +1,102 @@
++++ Timing tree for vTaskSuspendAll +++
+-- Guard tree
+0x80000d14  <END>
+
+-- Formula:
+
+Definition time_of_vTaskSuspendAll (t : trace) (gp : N) (mem : addr -> N) : Prop :=
+  cycle_count_of_trace t =
+(* 0x80000d14 *)   time_mem + 2 + time_mem + time_branch.
+
++++ Timing tree for uxListRemove +++
+-- Guard tree
+0x80002440 
+  - True : 0x80002460  <END>
+  - False: 0x8000245c 0x80002460  <END>
+
+-- Formula:
+
+Definition time_of_uxListRemove (t : trace) (gp : N) (mem : addr -> N) : Prop :=
+  cycle_count_of_trace t =
+(* 0x80002440 *)   time_mem + time_mem + time_mem + time_mem + time_mem + time_mem
+                   + (if mem Ⓓ [mem Ⓓ [reg_init_a0_22245_32 + 0x10] + 0x4] != reg_init_a0_22245_32
+                     then
+                       5 + (ML - 1) + 
+(* 0x80002460 *)       time_mem + time_mem + 2 + time_mem + time_branch
+                     else
+                       3 + 
+(* 0x8000245c *)       time_mem +
+(* 0x80002460 *)         time_mem + time_mem + 2 + time_mem + time_branch
+                     ).
+
++++ Timing tree for vTaskSwitchContext +++
+-- Guard tree
+0x8000137c 
+  - True : 0x80001390 
+      - True : 0x800013d0  xxx
+      - False: 0x800013b8 
+          - True : 0x800013d0  xxx
+          - False: 0x800013c0 
+              - True : 0x800013d0  xxx
+              - False: 0x800013c8 
+                  - True : 0x800013e0 
+                      - True : 0x80001424  <END>
+                      - False: 0x8000141c 0x80001424  <END>
+                  - False: 0x800013d0  xxx
+  - False: 0x80001384  <END>
+
+-- Formula:
+
+Definition time_of_vTaskSwitchContext (t : trace) (gp : N) (mem : addr -> N) : Prop :=
+  cycle_count_of_trace t =
+(* 0x8000137c *)   time_mem
+                   + (if mem Ⓓ [reg_init_gp_22242_32 + 0xfffff860] == 0x0
+                     then
+                       5 + (ML - 1) + 
+(* 0x80001390 *)       2 + time_mem + time_mem + time_mem + 2 + time_mem + time_mem + 2 + time_mem
+                       + (if mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30]] != 0xa5a5a5a5
+                         then
+                           5 + (ML - 1) + 
+(* 0x800013d0 *)           time_inf
+                         else
+                           3 + 
+(* 0x800013b8 *)           time_mem
+                           + (if mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4] != mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30]]
+                             then
+                               5 + (ML - 1) + 
+(* 0x800013d0 *)               time_inf
+                             else
+                               3 + 
+(* 0x800013c0 *)               time_mem
+                               + (if mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8] != mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4]
+                                 then
+                                   5 + (ML - 1) + 
+(* 0x800013d0 *)                   time_inf
+                                 else
+                                   3 + 
+(* 0x800013c8 *)                   time_mem
+                                   + (if mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0xc] == mem Ⓓ [mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8]
+                                     then
+                                       5 + (ML - 1) + 
+(* 0x800013e0 *)                       time_mem + 2 + (3 + clz (s R_A5) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
+                                       + (if mem Ⓓ [mem Ⓓ [reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ [reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0x4] != 0xfffffed8 + 0xffffffec * CLZ(mem Ⓓ [reg_init_gp_22242_32 + 0xfffff880]) + reg_init_gp_22242_32
+                                         then
+                                           5 + (ML - 1) + 
+(* 0x80001424 *)                           2 + 36 + time_mem + 2 + time_mem + time_mem + time_mem + time_mem + time_mem + 2 + time_branch
+                                         else
+                                           3 + 
+(* 0x8000141c *)                           time_mem + time_mem +
+(* 0x80001424 *)                             2 + 36 + time_mem + 2 + time_mem + time_mem + time_mem + time_mem + time_mem + 2 + time_branch
+                                         )
+                                     else
+                                       3 + 
+(* 0x800013d0 *)                       time_inf
+                                     )
+                                 )
+                             )
+                         )
+                     else
+                       3 + 
+(* 0x80001384 *)       2 + time_mem + time_branch
+                     ).
+

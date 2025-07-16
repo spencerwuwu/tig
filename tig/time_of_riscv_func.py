@@ -7,7 +7,7 @@ import re
 import sympy as sp
 from collections import defaultdict
 import networkx as nx
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 GHIDRA_ADDR_OFFSET = 0
 
@@ -54,7 +54,8 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
     elif mnem in ["srli", "slli", "srai"]:
         time = f"3 + args[2] / 4 + args[2] mod 4"
     elif mnem in ["lb", "lh", "lw", "lbu", "lhu", "sb", "sh", "sw"]:
-        time = f"5 + ({ML} - 2)"
+        #time = f"5 + ({ML} - 2)"
+        time = "time_mem"
     elif mnem in ["beq", "bne", "blt", "bge", "bltu", "bgeu"]:
         true_time = f"5 + ({ML} - 1)"
         false_time = "3"
@@ -74,7 +75,8 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
             condition = f"negb ({op1} <? {op2})"
         time = f"if {condition} then {true_time} else {false_time}"
     elif mnem in ["jal", "jalr"]:
-        time = f"5 + ({ML} - 1)"
+        #time = f"5 + ({ML} - 1)"
+        time = "time_branch"
     elif mnem in ["mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu"]:
         time = f"36"
     else:
@@ -134,6 +136,46 @@ def time_of_basic_block(block):
     final_instr = block["instructions"][-1]
     final_time, condition, true_time, false_time = time_of_riscv_instr(
         final_instr["mnem"], final_instr["operands"], "s", "ML"
+    )
+    if condition is None:
+        times.append(final_time)
+
+    return f"{' + '.join(times)}", condition, true_time, false_time
+
+
+def time_of_BasicBlock(block, cur_trace=[], all_traces=[]):
+    times = [
+        time_of_riscv_instr(instr.mnem, instr.operands, "s", "ML")[0]
+        for instr in block.instructions[:-1]
+    ]
+    times = [f"({time})" if " " in time else time for time in times]
+
+    # Check final instruction for branching
+    final_instr = block.instructions[-1]
+
+    if final_instr.mnem in ["jal", "jalr"]:
+        # Check return path exists, else infinite
+        # check only one exit_vaddr
+        if len(block.exit_vaddrs) > 1:
+            raise ValueError(f"0x{block.start_vaddr:x} has multiple exit_vaddrs for jal/jalr")
+        if len(block.exit_vaddrs) == 0:
+            check_trace = cur_trace
+        else:
+            check_trace = cur_trace + [block.exit_vaddrs[0]]
+        found = False
+        for trace in all_traces:
+            if len(trace) >= len(check_trace) and trace[: len(check_trace)] == check_trace:
+                found = True
+                break
+        if not found:
+            return "time_inf", None, None, None
+
+    # NOTE: Assume angr's branch guards true-false matches with exact instruction
+    #       Note sure if this is always the case, but it seems to be
+    #       e.g. we have (a == b) for `bne` and (a != b) for `beq`
+
+    final_time, condition, true_time, false_time = time_of_riscv_instr(
+        final_instr.mnem, final_instr.operands, "s", "ML"
     )
     if condition is None:
         times.append(final_time)
