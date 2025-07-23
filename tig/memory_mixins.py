@@ -59,6 +59,7 @@ class SymMemPlugin(SimStatePlugin):
         path_constraints:    [ <path_constraint:str> ] 
         branch_constraints:  [ <branch_constraint:ConstraintNode> ]   # shared between states
         recorded_history:    [ <instr_addr:int> ]   # shared between states
+        variables:           [ <symbolic_var:str> }  # shared between states, variables used as parameters
         history:             { <bb_addr>: [<TODO_info>] }
         memory_regions:      { <symbolic_addr:str>: {"read":  [<instr_addr:int>],
                                                      "write": [<instr_addr:int>]
@@ -92,6 +93,7 @@ class SymMemPlugin(SimStatePlugin):
                  path_constraints=[],
                  branch_constraints=[],
                  recorded_history=[],
+                 variables=[],
                  history={}, 
                  memory_regions={}):
         super().__init__()
@@ -99,6 +101,7 @@ class SymMemPlugin(SimStatePlugin):
         self.history = history
         self.path_constraints = path_constraints
         self.branch_constraints = branch_constraints
+        self.variables = variables
         self.recorded_history = recorded_history
         self.memory_regions = memory_regions
 
@@ -126,6 +129,7 @@ class SymMemPlugin(SimStatePlugin):
                             deepcopy(self.path_constraints),
                             self.branch_constraints,
                             self.recorded_history,
+                            self.variables,
                             deepcopy(self.history),
                             deepcopy(self.memory_regions))
 
@@ -133,7 +137,19 @@ class SymMemPlugin(SimStatePlugin):
         if entry.depth > 1: 
             # Expand non-terminals
             if len(entry.args) > 1:
-                return f" {infix[entry.op]} ".join(self.get_repr(arg) for arg in entry.args)
+                if str(infix[entry.op]) == "==":
+                    op = "=?"
+                    negate = False
+                elif str(infix[entry.op]) == "!=":
+                    op = "=?"
+                    negate = True
+                else:
+                    op = str(infix[entry.op])
+                    negate = False
+                repr = f" {op} ".join(self.get_repr(arg) for arg in entry.args)
+                if negate:
+                    repr = f"negb({repr})"
+                return repr
             else:
                 return f" {prefix[entry.op]} " + self.get_repr(entry.args[0])
         else: 
@@ -148,11 +164,11 @@ class SymMemPlugin(SimStatePlugin):
                         raise NotImplementedError(f"Cannot parse CLZ symbolic reference {value}")
                     clz_arg = match_group.group(1)
                     if clz_arg in self.symbolic_references:
-                        return f"CLZ(mem Ⓓ [{self.symbolic_references[clz_arg]}])"
+                        return f"CLZ(mem Ⓓ[{self.symbolic_references[clz_arg]}])"
                     else:
                         raise NotImplementedError(f"Cannot find symbolic reference for {clz_arg}")
                 else:
-                    return f"mem Ⓓ [{self.symbolic_references[value]}]"
+                    return f"mem Ⓓ[{self.symbolic_references[value]}]"
             else:
                 return f"0x{value:x}"
         
@@ -177,10 +193,21 @@ class SymMemPlugin(SimStatePlugin):
             return " (x Recorded) " + repr[:5] + "..."
 
 
-    def record_branch_jump(self, history:List[int], guard: BV, jmp_target: int)-> ConstraintNode | None:
+    def record_branch_jump(self, 
+                           history:List[int], 
+                           guard: BV, 
+                           jmp_target: int)-> ConstraintNode | None:
         # if no variable in c and eval to true, skip
         if len(guard.variables) == 0 and guard.is_true():
             return None
+
+        for v in guard.variables:
+            if v not in self.variables and \
+                v not in self.symbolic_references and \
+                not v.startswith("CLZ"):
+                if not v.startswith("reg_init"):
+                    raise NotImplementedError(f"Symbolic variable {v} not expected in constraints")
+                self.variables.append(v)
 
         repr = self.get_repr(guard)
         if repr not in self.path_constraints:

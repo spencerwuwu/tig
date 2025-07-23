@@ -6,7 +6,7 @@ from typing import Tuple, Optional, Dict, List
 from tig.extract_basic_blocks import extract_bb, get_non_terminated_functions
 from tig.bininfo import Instruction, BasicBlock, Function
 from tig.symbolic_execution import get_project, exec_func
-from tig.proof_synthesis import gen_function_time_formula
+from tig.proof_synthesis import gen_function_postcondition
 
 
 def time_of_riscv_instr(
@@ -236,8 +236,11 @@ def main():
 
     base_addr = data[0]["blocks"][0]["bb_start_vaddr"]
 
-    results = symexec_function(args.bin, func, base_addr, no_term_func_addrs, verbose=False)
-    func_time = gen_function_time_formula(func, results, verbose=True)
+    result = symexec_function(args.bin, func, base_addr, no_term_func_addrs, verbose=False)
+    func_time = gen_function_postcondition(func, 
+                                          result["info"],
+                                          result["results"], 
+                                          verbose=True)
 
     # invs = rocq_of_invariants(args.func, invs)
     # if args.out_file is None:

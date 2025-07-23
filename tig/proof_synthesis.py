@@ -152,14 +152,31 @@ def dfs_timing_tree(node: TimingTreeNode,
     return formula
 
 
-def gen_function_time_formula(function: Function, sym_traces: List[Dict], verbose: bool=False) -> str:
-    root = build_timing_tree(function, [t["history"] for t in sym_traces], sym_traces[0]["branch_constraints"])
+def gen_function_postcondition(function: Function, 
+                              sym_info: Dict[str, Any],
+                              sym_traces: List[Dict], 
+                              verbose: bool=False) -> str:
+
+    def _gen_reg_args(sym_info: Dict[str, Any], has_mem_ref: bool) -> str:
+        params = []
+        if has_mem_ref and len(sym_info["branch_constraints"]) > 0:
+            params.append("  (mem : addr -> N)\n")
+        for reg in sym_info["registers"]:
+            for v in sym_info["variables"]:
+                if v.startswith(f"reg_init_{reg.lower()}"):
+                    params.append(f"  ({v} : N)\t(* {reg} *)\n")
+        return "".join(params)
+
+    root = build_timing_tree(function, [t["history"] for t in sym_traces], sym_info["branch_constraints"])
     if verbose:
         print(f"+++ Timing tree for {function.name} +++")
         print("-- Guard tree")
+
     formula = dfs_timing_tree(root, [function.entry_point], [t["history"] for t in sym_traces], 1, verbose=verbose)
-    time_of  = f"Definition time_of_{function.name} (t : trace) (gp : N) (mem : addr -> N) : Prop :=\n"
-    time_of += f"  cycle_count_of_trace t ="
+    time_of  = f"Definition time_of_{function.name} (t : trace)\n"
+    time_of += _gen_reg_args(sym_info, has_mem_ref=any(len(t["memory_regions"]) > 0 for t in sym_traces))
+    time_of += "  : Prop :=\n"
+    time_of += f"    cycle_count_of_trace t ="
     time_of += formula
     time_of += "."
     if verbose:

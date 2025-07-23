@@ -48,17 +48,21 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
     ]:
         time = "2"
     elif mnem in ["srl", "sll", "sra"]:
+        raise NotImplementedError(f"Shift instructions {mnem} not implemented")
         time = f"3 + ({store_name} {args[2]} / 4 + {store_name} {args[2]} mod 4)"
     elif mnem == "clz":
+        raise NotImplementedError("clz instruction not implemented")
         time = f"3 + clz ({store_name} {args[1]}) 32"
     elif mnem in ["srli", "slli", "srai"]:
-        time = f"3 + args[2] / 4 + args[2] mod 4"
+        raise NotImplementedError(f"Shift instructions {mnem} not implemented")
+        time = f"3 + {args[2]} / 4 + {args[2]} mod 4"
     elif mnem in ["lb", "lh", "lw", "lbu", "lhu", "sb", "sh", "sw"]:
         #time = f"5 + ({ML} - 2)"
         time = "time_mem"
     elif mnem in ["beq", "bne", "blt", "bge", "bltu", "bgeu"]:
         true_time = f"5 + ({ML} - 1)"
         false_time = "3"
+        # NOTE: not using in time_of_BasicBlock
         op1 = "0" if args[0] == "zero" else f"{store_name} {args[0]}"
         op2 = "0" if args[1] == "zero" else f"{store_name} {args[1]}"
         if mnem == "beq":
@@ -153,6 +157,16 @@ def time_of_BasicBlock(block, cur_trace=[], all_traces=[]):
     # Check final instruction for branching
     final_instr = block.instructions[-1]
 
+    br_instrs = ["beq", "bne", "blt", "bge", "bltu", "bgeu"]
+    if final_instr.mnem in br_instrs:
+        # NOTE: Assume angr's branch guards true-false matches with exact instruction
+        #       Note sure if this is always the case, but it seems to be
+        #       e.g. we have (a == b) for `bne` and (a != b) for `beq`
+        _, _, true_time, false_time = time_of_riscv_instr(
+            final_instr.mnem, final_instr.operands, "s", "ML"
+        )
+        return f"{' + '.join(times)}", True, true_time, false_time
+
     if final_instr.mnem in ["jal", "jalr"]:
         # Check return path exists, else infinite
         # check only one exit_vaddr
@@ -170,17 +184,14 @@ def time_of_BasicBlock(block, cur_trace=[], all_traces=[]):
         if not found:
             return "time_inf", None, None, None
 
-    # NOTE: Assume angr's branch guards true-false matches with exact instruction
-    #       Note sure if this is always the case, but it seems to be
-    #       e.g. we have (a == b) for `bne` and (a != b) for `beq`
-
     final_time, condition, true_time, false_time = time_of_riscv_instr(
         final_instr.mnem, final_instr.operands, "s", "ML"
     )
-    if condition is None:
-        times.append(final_time)
+    if condition is not None:
+        raise ValueError(f"Shouldn't have condition for {final_instr.mnem}")
+    times.append(final_time)
 
-    return f"{' + '.join(times)}", condition, true_time, false_time
+    return f"{' + '.join(times)}", condition, None, None
 
 
 def time_of_function_basic_blocks(results, function_name):

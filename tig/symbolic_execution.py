@@ -132,6 +132,7 @@ def make_registers_symbolic(
     import re
     arch = project.arch
     # make registers symbolic: sp, ra, gp; a0...a?, s0...s?
+    init_regs = []
     for reg_name in arch.registers:
         if not (re.match(r"(a|s)\d+", reg_name) or reg_name in ["sp", "ra", "gp"]):
             continue
@@ -141,6 +142,8 @@ def make_registers_symbolic(
         sym_val = claripy.BVS(f"reg_init_{reg_name}", size_bits)
         # Write symbolic value to register
         state.registers.store(reg_name, sym_val)
+        init_regs.append(reg_name)
+    return init_regs
 
 
 class NonTermAvoid(angr.exploration_techniques.ExplorationTechnique):
@@ -198,13 +201,17 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
         state.get_plugin("sym_mem").symbolic_references[state.inspect.symbolic_name] = None
 
     def symmem_mem_read(state):
-        repr = state.get_plugin("sym_mem").record_memory_read(state.inspect.instruction, state.inspect.mem_read_address, state.inspect.mem_read_expr)
+        f = state.get_plugin("sym_mem").record_memory_read
+        repr = f(state.inspect.instruction, 
+                 state.inspect.mem_read_address, 
+                 state.inspect.mem_read_expr)
         if verbose:
             print(" MEM Read ", state.inspect.mem_read_expr, "from:", repr)
             print(f"               ({state.inspect.mem_read_address})")
 
     def symmem_mem_write(state):
-        repr = state.get_plugin("sym_mem").record_memory_write(state.inspect.instruction, state.inspect.mem_write_address)
+        f = state.get_plugin("sym_mem").record_memory_write
+        repr = f(state.inspect.instruction, state.inspect.mem_write_address)
         if verbose:
             print(" MEM Write", state.inspect.mem_write_expr, "to:", repr)
             print(f"               ({state.inspect.mem_write_address})")
@@ -219,7 +226,8 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
         #    print("   Skip adding:", c)
 
     def symmem_path_constraint(state):
-        repr = state.get_plugin("sym_mem").record_path_constraint(list(state.history.bbl_addrs), state.inspect.added_constraints)
+        f = state.get_plugin("sym_mem").record_path_constraint
+        repr = f(list(state.history.bbl_addrs), state.inspect.added_constraints)
         if repr is not None and verbose:
             if not repr.startswith(" (x Recorded)"):
                 print(" Path constraint:", repr)
@@ -238,10 +246,11 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
             print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
 
     def symmem_exit(state):
-        #if state.inspect.exit_jumpkind == "Ijk_Boring":
         jmp_target = state.inspect.exit_target
         guard = state.inspect.exit_guard
-        cn = state.get_plugin("sym_mem").record_branch_jump(list(state.history.bbl_addrs), guard, jmp_target)
+        f = state.get_plugin("sym_mem").record_branch_jump
+        cn = f(list(state.history.bbl_addrs), guard, jmp_target)
+
         if verbose:
             print("*", hex(state.inspect.instruction), "->", hex(jmp_target), f"({state.inspect.exit_jumpkind})")
             print(" Guard", cn)
@@ -271,7 +280,7 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
 def exec_func(p: angr.Project, 
               func: Function, 
               non_term_funcs: List[int], 
-              verbose: bool = False) -> List[Dict]:
+              verbose: bool = False) -> Dict:
     """Symbolically executes a function and computes input constraints
 
     Args:
@@ -281,7 +290,10 @@ def exec_func(p: angr.Project,
         verbose (bool): debug printing
 
     Returns:
-        List[claripy.ast.bool.Bool]: Constraints corresponding to control-flow paths through the function
+        Dict[
+            "results": List[], # info from each sym-exec path through the function
+            "info":    Dict[]     # common information about all paths
+        ]
     """
     # Reference: https://docs.angr.io/en/latest/appendix/options.html
     #  - angr.options.CONSERVATIVE_READ_STRATEGY sounds good but oddly useless
@@ -299,7 +311,7 @@ def exec_func(p: angr.Project,
 
     make_static_memory_symbolic(p, state, chunk_size=4)
 
-    make_registers_symbolic(p, state, reg_size=8)
+    init_regs = make_registers_symbolic(p, state, reg_size=8)
 
     hook_symmem(state, verbose)
 
@@ -338,6 +350,15 @@ def exec_func(p: angr.Project,
     #   "history": s.get_plugin("sym_mem").history, 
     #   "path_constraints": s.get_plugin("sym_mem").get_constraint_reprs(s.solver.constraints)        
     results = []
+    if not sm.found:
+        return {"results": results, "info": {}}
+    state = sm.found[0]
+    info = {
+        "variables": state.get_plugin("sym_mem").variables,
+        "branch_constraints": state.get_plugin("sym_mem").branch_constraints,
+        "branch_history": state.get_plugin("sym_mem").recorded_history,
+        "registers": init_regs, # Used for proof synthesis
+    }
 
     for s in sm.found:
         results.append({
@@ -345,8 +366,6 @@ def exec_func(p: angr.Project,
             "history": list(s.history.bbl_addrs), 
             "memory_regions": list(s.get_plugin("sym_mem").memory_regions.keys()),
             "path_constraints": s.get_plugin("sym_mem").path_constraints,
-            "branch_constraints": s.get_plugin("sym_mem").branch_constraints,
-            "branch_history": s.get_plugin("sym_mem").recorded_history,
         })
     #s = sm.found[-1]
     #cns = s.get_plugin("sym_mem").branch_constraints
@@ -354,4 +373,4 @@ def exec_func(p: angr.Project,
     #    print(cn.repr)
     #    print(f"    - True: {hex(cn.true_jmp_target)}, False: {hex(cn.false_jmp_target)}, History: {', '.join(hex(addr) for addr in cn.history)}")
 
-    return results
+    return {"results": results, "info": info}
