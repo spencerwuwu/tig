@@ -190,7 +190,7 @@ class NonTermAvoid(angr.exploration_techniques.ExplorationTechnique):
         state.inspect.b("call", when=angr.BP_BEFORE, action=check_calling_non_term)
 
 
-def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
+def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> None:
     """ Hook tig.memory_mixins.SymMemPlugin operations """
     state.register_plugin('sym_mem', tig.memory_mixins.SymMemPlugin())
 
@@ -238,12 +238,21 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
         if verbose:
             print(" REG Write", state.inspect.reg_write_expr, "to", reg_name)
+        # NOTE: instructions arguments should be handled here
 
     def symmem_reg_read(state):
         reg_offset = state.inspect.reg_read_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
         if verbose:
             print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
+        # NOTE: instructions arguments are handled here
+        cur_instr = func.get_instruction(state.inspect.instruction)
+        if cur_instr is None:
+            return
+        if cur_instr.mnem == "clz":
+            # NOTE: recorde clz "read" arg for timing 
+            f = state.get_plugin("sym_mem").record_instr_arg
+            f("clz", list(state.history.bbl_addrs), state.inspect.instruction, state.inspect.reg_read_expr, 1)
 
     def symmem_exit(state):
         jmp_target = state.inspect.exit_target
@@ -260,8 +269,12 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
             #print("\t", state.inspect.exit_jumpkind, guard)
 
     def record_addr(state):
+        instr = func.get_instruction(state.inspect.instruction)
         if verbose:
-            print("\n->", hex(state.inspect.instruction))
+            if instr is not None:
+                print("\n->", instr)
+            else:
+                print("\n->", hex(state.inspect.instruction), "??")
         # TODO: May be useful for fine-grained records
         state.get_plugin("sym_mem").history[state.inspect.instruction] = []
 
@@ -272,7 +285,6 @@ def hook_symmem(state: angr.SimState, verbose: bool = False) -> None:
     state.inspect.b('address_concretization', when=angr.BP_BEFORE, action=skip_memory_constraints)
     state.inspect.b("constraints", when=angr.BP_AFTER, action=symmem_path_constraint)
     state.inspect.b("exit", when=angr.BP_AFTER, action=symmem_exit)
-    # No operations for register read/write (yet)
     state.inspect.b("reg_read", when=angr.BP_AFTER, action=symmem_reg_read)
     state.inspect.b("reg_write", when=angr.BP_AFTER, action=symmem_reg_write)
 
@@ -313,7 +325,7 @@ def exec_func(p: angr.Project,
 
     init_regs = make_registers_symbolic(p, state, reg_size=8)
 
-    hook_symmem(state, verbose)
+    hook_symmem(state, func, verbose)
 
     sm = p.factory.simgr(state)
 
@@ -366,6 +378,7 @@ def exec_func(p: angr.Project,
             "history": list(s.history.bbl_addrs), 
             "memory_regions": list(s.get_plugin("sym_mem").memory_regions.keys()),
             "path_constraints": s.get_plugin("sym_mem").path_constraints,
+            "instruction_args": s.get_plugin("sym_mem").instruction_args,
         })
     #s = sm.found[-1]
     #cns = s.get_plugin("sym_mem").branch_constraints

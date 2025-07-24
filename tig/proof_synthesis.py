@@ -28,7 +28,10 @@ class TimingTreeNode:
         return self.constraint_node.repr
 
 
-def build_timing_tree(function, traces: List[List[int]], constraint_nodes: List):
+def build_timing_tree(function, 
+                      traces: List[List[int]], 
+                      instruction_args: List[Dict],
+                      constraint_nodes: List):
     # Assert that all traces start with function.entry_point
     for t in traces:
         if t[0] != function.entry_point:
@@ -36,7 +39,8 @@ def build_timing_tree(function, traces: List[List[int]], constraint_nodes: List)
             raise ValueError(f"Traces not sync with Function Data")
 
     root_node = TimingTreeNode(function.blocks[0])
-    for trace in traces[::-1]:
+    for trace_id, trace in enumerate(traces[::-1],start=1):
+        trace_id = - trace_id  # Reverse order for traces[::-1]
         cur_node = root_node
         prev_node = None
         for idx, block_addr in enumerate(trace):
@@ -60,7 +64,11 @@ def build_timing_tree(function, traces: List[List[int]], constraint_nodes: List)
             if cur_node.block_time is None:
                 cur_block = function.get_block(block_addr)
                 cur_trace = trace[:idx]
-                block_t, condition, true_t, false_t = time_of_BasicBlock(cur_block, cur_trace, traces)
+                cur_instr_args = instruction_args[trace_id]
+                block_t, condition, true_t, false_t = time_of_BasicBlock(cur_block, 
+                                                                         cur_trace, 
+                                                                         cur_instr_args,
+                                                                         traces)
                 cur_node.set_time(block_t, true_t, false_t)
                 if condition:
                     # Sync with constraint_node
@@ -167,7 +175,10 @@ def gen_function_postcondition(function: Function,
                     params.append(f"  ({v} : N)\t(* {reg} *)\n")
         return "".join(params)
 
-    root = build_timing_tree(function, [t["history"] for t in sym_traces], sym_info["branch_constraints"])
+    root = build_timing_tree(function, 
+                             [t["history"] for t in sym_traces], 
+                             [t["instruction_args"] for t in sym_traces], 
+                             sym_info["branch_constraints"])
     if verbose:
         print(f"+++ Timing tree for {function.name} +++")
         print("-- Guard tree")

@@ -62,6 +62,7 @@ class Function(list):
         self.name: str = data["function_name"]
         self.blocks: List[BasicBlock] = [BasicBlock(block) for block in data["blocks"]]
         self.block_dict: Dict[int, BasicBlock] = {b.start_vaddr: b for b in self.blocks}
+        self.instructions: Dict[int, Instruction] = {i.offset: i for b in self.blocks for i in b.instructions}
 
     @property
     def entry_point(self) -> int:
@@ -73,6 +74,9 @@ class Function(list):
 
     def get_block(self, vaddr: int) -> BasicBlock | None:
         return self.block_dict.get(vaddr, None)
+
+    def get_instruction(self, offset: int) -> Instruction | None:
+        return self.instructions.get(offset, None)
 
     def __repr__(self):
         out = f"<{self.name}>\n"

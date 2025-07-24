@@ -61,6 +61,7 @@ class SymMemPlugin(SimStatePlugin):
         recorded_history:    [ <instr_addr:int> ]   # shared between states
         variables:           [ <symbolic_var:str> }  # shared between states, variables used as parameters
         history:             { <bb_addr>: [<TODO_info>] }
+        instruction_args:   { <instr_mnem:str>: [(history:List[int], arg_repr:str, arg_idx:int)] }
         memory_regions:      { <symbolic_addr:str>: {"read":  [<instr_addr:int>],
                                                      "write": [<instr_addr:int>]
                                                     }
@@ -95,6 +96,7 @@ class SymMemPlugin(SimStatePlugin):
                  recorded_history=[],
                  variables=[],
                  history={}, 
+                 instruction_args={},
                  memory_regions={}):
         super().__init__()
         self.symbolic_references = symbolic_references
@@ -102,6 +104,7 @@ class SymMemPlugin(SimStatePlugin):
         self.path_constraints = path_constraints
         self.branch_constraints = branch_constraints
         self.variables = variables
+        self.instruction_args = instruction_args
         self.recorded_history = recorded_history
         self.memory_regions = memory_regions
 
@@ -131,6 +134,7 @@ class SymMemPlugin(SimStatePlugin):
                             self.recorded_history,
                             self.variables,
                             deepcopy(self.history),
+                            deepcopy(self.instruction_args),
                             deepcopy(self.memory_regions))
 
     def get_repr(self, entry: BV)-> str:
@@ -237,3 +241,9 @@ class SymMemPlugin(SimStatePlugin):
                 h = ", ".join(f"{hex(addr)}" for addr in history)
                 raise NotImplementedError(f"ConstraintNode {repr} misbehave at history {h}")
         return target_cn
+
+    def record_instr_arg(self, instr:str, bb_history: List[int], addr:int, arg: BV, arg_idx: int)-> None:
+        history = bb_history + [addr]
+        if instr not in self.instruction_args:
+            self.instruction_args[instr] = []
+        self.instruction_args[instr].append((history, self.get_repr(arg), arg_idx))

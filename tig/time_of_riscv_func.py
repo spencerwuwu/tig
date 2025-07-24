@@ -18,16 +18,16 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
     condition, true_time, false_time = None, None, None
 
     # Preprocess args into Picinae registers
-    for i in range(len(args)):
-        arg = args[i]
-        if (
-            arg
-            in "ra sp gp tp t0 t1 t2 t3 t4 t5 t6 s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 a0 a1 a2 a3 a4 a5 a6 a7".split(
-                " "
-            )
-        ):
-            arg = f"R_{arg.upper()}"
-        args[i] = arg
+    #for i in range(len(args)):
+    #    arg = args[i]
+    #    if (
+    #        arg
+    #        in "ra sp gp tp t0 t1 t2 t3 t4 t5 t6 s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 a0 a1 a2 a3 a4 a5 a6 a7".split(
+    #            " "
+    #        )
+    #    ):
+    #        arg = f"R_{arg.upper()}"
+    #    args[i] = arg
 
     if mnem in [
         "add",
@@ -51,8 +51,10 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
         raise NotImplementedError(f"Shift instructions {mnem} not implemented")
         time = f"3 + ({store_name} {args[2]} / 4 + {store_name} {args[2]} mod 4)"
     elif mnem == "clz":
-        raise NotImplementedError("clz instruction not implemented")
-        time = f"3 + clz ({store_name} {args[1]}) 32"
+        #time = f"3 + clz ({store_name} {args[1]}) 32"
+        if args[1] is None:
+            raise ValueError("clz instruction requires an argument")
+        time = f"3 + clz ({args[1]}) 32"
     elif mnem in ["srli", "slli", "srai"]:
         raise NotImplementedError(f"Shift instructions {mnem} not implemented")
         time = f"3 + {args[2]} / 4 + {args[2]} mod 4"
@@ -147,9 +149,31 @@ def time_of_basic_block(block):
     return f"{' + '.join(times)}", condition, true_time, false_time
 
 
-def time_of_BasicBlock(block, cur_trace=[], all_traces=[]):
+def time_of_BasicBlock(block, 
+                       cur_trace=[], 
+                       cur_instr_args={},
+                       all_traces=[]):
+    def _get_instr_operands(instr, cur_instr_args, cur_trace):
+        args = [None, None, None]
+        if instr.mnem in cur_instr_args:
+            found = False
+            instr_history = cur_trace + [block.start_vaddr, instr.offset]
+            collected = cur_instr_args[instr.mnem]
+            for history, repr, idx in collected:
+                if history == instr_history:
+                    args[idx] = repr
+                    found = True
+            if not found:
+                raise ValueError(
+                    f"Cannot find instruction {instr.mnem} with history {[hex(a) for a in instr_history]} in args"
+                )
+        return args
+
     times = [
-        time_of_riscv_instr(instr.mnem, instr.operands, "s", "ML")[0]
+        time_of_riscv_instr(instr.mnem, 
+                            _get_instr_operands(instr, cur_instr_args, cur_trace),
+                            "s", 
+                            "ML")[0]
         for instr in block.instructions[:-1]
     ]
     times = [f"({time})" if " " in time else time for time in times]
