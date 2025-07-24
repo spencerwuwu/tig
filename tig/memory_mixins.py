@@ -24,6 +24,7 @@ from claripy.operations import infix, prefix
 
 
 class ConstraintNode():
+    """ Class to store brach conditions on a sym-exec path """
     def __init__(self, history: List[int], constraint: BV, repr: str, inv_repr: str):
         self.history = history
         self.bvv = constraint
@@ -58,18 +59,27 @@ class SymMemPlugin(SimStatePlugin):
         symbolic_references: { <symbolic_var:str>: <symbolic_var:addr> }
         path_constraints:    [ <path_constraint:str> ] 
         branch_constraints:  [ <branch_constraint:ConstraintNode> ]   # shared between states
-        recorded_history:    [ <instr_addr:int> ]   # shared between states
-        variables:           [ <symbolic_var:str> }  # shared between states, variables used as parameters
-        history:             { <bb_addr>: [<TODO_info>] }
-        instruction_args:   { <instr_mnem:str>: [(history:List[int], arg_repr:str, arg_idx:int)] }
+        recorded_history:    [ <instr_addr:int> ]                     # shared between states
+        variables:           [ <symbolic_var:str> }                   # shared between states,
+        history:             { <instr_addr>: [<TODO_info>] }
+        instruction_args:    { <instr_mnem:str>: [(history:List[int], arg_repr:str, arg_idx:int)] }
         memory_regions:      { <symbolic_addr:str>: {"read":  [<instr_addr:int>],
                                                      "write": [<instr_addr:int>]
                                                     }
                              }
+
+        - symbolic_references:  store the mapping of a symbolic address to its repr
+        - path_constraints:     all constraints generated when sym-exec during each state
+        - branch_constraints:   collected (adding T/F child) when branch condition is evaluated
+        - recorded_history:     help tracking the creation of branch_constraints, each CN should be unique
+        - variables:            this helps creating function parameters in proof synthesis
+        - history:              updates in tig.symbolic_execution.hook_symmem.record_addr, useless for now
+        - instruction_args:     repr of symbolic arguments of instructions, used in proof synthesis
+        - memory_regions:       tracks the usage of symbolic memory addresses, used in memory_no_overlap proof
                                     
     Functions:
     - get_repr(entry: BV) -> str
-        * Get a string representation of a symbolic value.
+        * Get a string representation of a symbolic value (recursively dereferencing BV)
 
     - record_memory_read(instr_addr: int, symbolic_addr: BV, symbolic_value: BV) -> str
         * Updates `memory_regions`
@@ -84,10 +94,25 @@ class SymMemPlugin(SimStatePlugin):
 
     - get_constraint_reprs(constraints: List[BV])-> List[str]:
         * get_repr for list of BV constraints (from `s.solver.constraints`) 
+        * useless for now
 
-    - record_constraint(constraints: Tuple[BV])-> str | None:
+    - record_path_constraint(self, history:List[int], constraints: Tuple[BV])-> str | None
         * Record a constraint in `path_constraints` if it is not already present.
         * Hooked to state.inspect.b("constraints")
+
+    - record_branch_jump(self, history:List[int], guard: BV, jmp_target: int)-> ConstraintNode | None
+        * Construct a ConstraintNode with the given history and guard. 
+        * Set up the jump target for the branch.
+        * If the history is already recorded, it will add the jump target to the existing ConstraintNode.
+        * Hooked to state.inspect.b("branch_jump")
+
+    - record_instr_arg(self, instr:str, bb_history: List[int], addr:int, arg: BV, arg_idx: int)-> None
+        * Record the symbolic argument of an instruction in `instruction_args`.
+        * Each record is a tuple of (history, repr(arg), arg_idx).
+        * The history is the [basic block history] + [instruction address]
+        * Currently only implements `clz`
+        * Hook target is based on VEX's implementation of each instruction
+
     """
     def __init__(self, 
                  symbolic_references={}, 

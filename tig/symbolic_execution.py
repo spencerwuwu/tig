@@ -380,10 +380,5 @@ def exec_func(p: angr.Project,
             "path_constraints": s.get_plugin("sym_mem").path_constraints,
             "instruction_args": s.get_plugin("sym_mem").instruction_args,
         })
-    #s = sm.found[-1]
-    #cns = s.get_plugin("sym_mem").branch_constraints
-    #for cn in cns:
-    #    print(cn.repr)
-    #    print(f"    - True: {hex(cn.true_jmp_target)}, False: {hex(cn.false_jmp_target)}, History: {', '.join(hex(addr) for addr in cn.history)}")
 
     return {"results": results, "info": info}
