@@ -133,6 +133,16 @@ class SymMemPlugin(SimStatePlugin):
         self.recorded_history = recorded_history
         self.memory_regions = memory_regions
 
+
+    def _add_variable(self, var: BV)-> None:
+        for v in var.variables:
+            if v not in self.variables and \
+                v not in self.symbolic_references and \
+                not v.startswith("CLZ"):
+                if not v.startswith("reg_init"):
+                    raise NotImplementedError(f"Symbolic variable {v} not expected in constraints")
+                self.variables.append(v)
+
     def record_memory_read(self, instr_addr: int, symbolic_addr: BV, symbolic_value: BV)-> str:
         addr_repr = self.get_repr(symbolic_addr)
         if symbolic_value.depth == 1 and len(symbolic_value.variables) == 1:
@@ -140,6 +150,7 @@ class SymMemPlugin(SimStatePlugin):
             self.symbolic_references[symbolic_name] = addr_repr
         if addr_repr not in self.memory_regions:
             self.memory_regions[addr_repr] = {"read":[instr_addr], "write":[]}
+            self._add_variable(symbolic_value)
         else:
             self.memory_regions[addr_repr]["read"].append(instr_addr)
         return addr_repr
@@ -148,6 +159,7 @@ class SymMemPlugin(SimStatePlugin):
         addr_repr = self.get_repr(symbolic_addr)
         if addr_repr not in self.memory_regions:
             self.memory_regions[addr_repr] = {"read":[], "write":[instr_addr]}
+            self._add_variable(symbolic_addr)
         else:
             self.memory_regions[addr_repr]["write"].append(instr_addr)
         return addr_repr
@@ -213,6 +225,8 @@ class SymMemPlugin(SimStatePlugin):
         # if no variable in c and eval to true, skip
         if len(c.variables) == 0 and c.is_true():
             return None
+        
+        self._add_variable(c)
 
         repr = self.get_repr(c)
         if repr not in self.path_constraints:
@@ -229,14 +243,8 @@ class SymMemPlugin(SimStatePlugin):
         # if no variable in c and eval to true, skip
         if len(guard.variables) == 0 and guard.is_true():
             return None
-
-        for v in guard.variables:
-            if v not in self.variables and \
-                v not in self.symbolic_references and \
-                not v.startswith("CLZ"):
-                if not v.startswith("reg_init"):
-                    raise NotImplementedError(f"Symbolic variable {v} not expected in constraints")
-                self.variables.append(v)
+        
+        self._add_variable(guard)
 
         repr = self.get_repr(guard)
         if repr not in self.path_constraints:

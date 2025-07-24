@@ -1,6 +1,8 @@
 from tig.time_of_riscv_func import time_of_BasicBlock
 from tig.bininfo import Instruction, BasicBlock, Function
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
+from jinja2 import Environment, FileSystemLoader
+
 
 
 class TimingTreeNode:
@@ -102,7 +104,7 @@ def dfs_timing_tree(node: TimingTreeNode,
                     cur_trace: List[int]=[], 
                     all_traces: List[List[int]]=[], 
                     depth: int=0,
-                    verbose: bool=True):
+                    verbose: bool=False):
     if verbose:
         print(f"{node.block.start_vaddr:#x} ", end="")
 
@@ -160,20 +162,21 @@ def dfs_timing_tree(node: TimingTreeNode,
     return formula
 
 
+def _gen_reg_args(sym_info: Dict[str, Any]) -> Tuple[str, str]:
+    params = []
+    variables = []
+    for reg in sym_info["registers"]:
+        for v in sym_info["variables"]:
+            if v.startswith(f"reg_init_{reg.lower()}"):
+                params.append(f"  ({v} : N)\t(* {reg} *)\n")
+                variables.append(v)
+    return "".join(params), " ".join(variables)
+
+
 def gen_function_postcondition(function: Function, 
                               sym_info: Dict[str, Any],
                               sym_traces: List[Dict], 
                               verbose: bool=False) -> str:
-
-    def _gen_reg_args(sym_info: Dict[str, Any], has_mem_ref: bool) -> str:
-        params = []
-        if has_mem_ref and len(sym_info["branch_constraints"]) > 0:
-            params.append("  (mem : addr -> N)\n")
-        for reg in sym_info["registers"]:
-            for v in sym_info["variables"]:
-                if v.startswith(f"reg_init_{reg.lower()}"):
-                    params.append(f"  ({v} : N)\t(* {reg} *)\n")
-        return "".join(params)
 
     root = build_timing_tree(function, 
                              [t["history"] for t in sym_traces], 
@@ -183,9 +186,16 @@ def gen_function_postcondition(function: Function,
         print(f"+++ Timing tree for {function.name} +++")
         print("-- Guard tree")
 
+    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces)
+    if has_mem_ref and len(sym_info["branch_constraints"]) > 0:
+        mem_param = "  (mem : addr -> N)\n"
+    else:
+        mem_param = ""
+
     formula = dfs_timing_tree(root, [function.entry_point], [t["history"] for t in sym_traces], 1, verbose=verbose)
     time_of  = f"Definition time_of_{function.name} (t : trace)\n"
-    time_of += _gen_reg_args(sym_info, has_mem_ref=any(len(t["memory_regions"]) > 0 for t in sym_traces))
+    time_of += mem_param
+    time_of += _gen_reg_args(sym_info)[0]
     time_of += "  : Prop :=\n"
     time_of += f"    cycle_count_of_trace t ="
     time_of += formula
@@ -195,4 +205,63 @@ def gen_function_postcondition(function: Function,
         print(time_of)
         print()
     return time_of
+
+
+def gen_function_memory_regions(function: Function,
+                                sym_info: Dict[str, Any],
+                                sym_traces: List[Dict],
+                                verbose: bool=False) -> str:
+    memory_regions = set()
+    for t in sym_traces:
+        for m in t["memory_regions"]:
+            memory_regions.add((m))
+
+    param_regs, var_regs = _gen_reg_args(sym_info)
+
+    text  = "Definition memory_regions\n"
+    text += "  (mem : addr -> N)\n" 
+    text += param_regs
+    text += "    := map (fun x => (4, x)) [\n"
+    text += "\t\t" + ";\n\t\t".join(memory_regions)
+    text += "\n"
+    text += "      ].\n\n"
+    text += "Definition noverlaps\n"
+    text += "  (mem : addr -> N)\n" 
+    text += param_regs
+    text += f"    :=  create_noverlaps (memory_regions mem {var_regs})."
+    
+
+    return text
+
+
+def synthesize_noverlaps(function: Function,
+                         sym_info: Dict[str, Any],
+                         sym_traces: List[Dict], 
+                         verbose: bool=False
+                         ):
+    entry_addr = hex(function.entry_point)
+    end_addrs = "| ".join(set(hex(t["history"][-1]) for t in sym_traces))
+
+    postcondition = gen_function_postcondition(function, sym_info, sym_traces, verbose=verbose)
+
+    memory_regions = gen_function_memory_regions(function, sym_info, sym_traces, verbose=verbose)
+
+    # TODO:
+    invariants = "(* TODO *)"
+    proof = "(* TODO *)"
+
+    # Loading Jinja modules and templates
+    jinja_env = Environment(loader=FileSystemLoader("tig/jinja_templates"))
+    noverlaps_temp = jinja_env.get_template("noverlaps.template.v")
+
+    return noverlaps_temp.render(
+        func_name=function.name,
+        entry_addr=entry_addr,
+        end_addrs=end_addrs,
+        postcondition=postcondition,
+        memory_regions=memory_regions,
+        invariants=invariants,
+        proof=proof,
+    )
+
 

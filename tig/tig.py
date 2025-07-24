@@ -7,6 +7,7 @@ from tig.extract_basic_blocks import extract_bb, get_non_terminated_functions
 from tig.bininfo import Instruction, BasicBlock, Function
 from tig.symbolic_execution import get_project, exec_func
 from tig.proof_synthesis import gen_function_postcondition
+from tig.proof_synthesis import synthesize_noverlaps
 
 
 def time_of_riscv_instr(
@@ -164,35 +165,12 @@ def symexec_function(bin_path: str,
     # - Function exit points
     # - Everywhere more than one control-flow paths merge
 
-    # Do preorder traversal of dominator tree to visit all nodes
-    # before a control-flow merge before the merge point
-
     # For each node
 
     p = get_project(bin_path, base_addr)
     f = exec_func(p, func, no_term_func_addrs, verbose=verbose)
 
     return f
-    with open("paths.txt", "w") as file:
-        file.write("Function: " + func.name + "\n\n")
-        for result in f:
-            file.write(f"- Reached block: {hex(result['end_address'])}\n")
-            file.write(f"  * Traces:\n      ")
-            file.write(", ".join(f"0x{x:x}" for x in result["history"]))
-            file.write("\n")
-            file.write(f"  * Path constraints:\n")
-            for c in result["path_constraints"]:
-                file.write(f"      {c}\n")
-            file.write(f"  * Memory regions:\n")
-            for m in result["memory_regions"]:
-                file.write(f"      {m}\n")
-            file.write("\n")
-            file.write("\n")
-    # for block in func:
-    #     print(f"====={block.start_vaddr}=====")
-    #     print(exec_bb(p, block, []))
-
-    return {}
 
 
 def main():
@@ -204,6 +182,7 @@ def main():
     parser.add_argument("--objdump", default="riscv32-unknown-elf-objdump", type=str)
     parser.add_argument("--disas", action="store_true")
     parser.add_argument("--out-file", default=None, type=str)
+
     args = parser.parse_args()
 
     if args.disas:
@@ -237,17 +216,14 @@ def main():
     base_addr = data[0]["blocks"][0]["bb_start_vaddr"]
 
     result = symexec_function(args.bin, func, base_addr, no_term_func_addrs, verbose=False)
-    func_time = gen_function_postcondition(func, 
-                                          result["info"],
-                                          result["results"], 
-                                          verbose=True)
 
-    # invs = rocq_of_invariants(args.func, invs)
-    # if args.out_file is None:
-    #     print(invs)
-    # else:
-    #     with open(args.out_file, "w") as file:
-    #         file.write(invs)
+    rocq = synthesize_noverlaps(func, result["info"], result["results"], verbose=False)
+
+    if args.out_file is None:
+        print(rocq)
+    else:
+        with open(args.out_file, "w") as file:
+            file.write(rocq)
 
 
 if __name__ == "__main__":
