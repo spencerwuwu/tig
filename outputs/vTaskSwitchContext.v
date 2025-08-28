@@ -23,7 +23,7 @@ Module vTaskSwitchContextTime <: TimingModule.
   
   Definition exits (t:trace) : bool :=
       match t with (Addr a,_)::_ => match a with
-      | 0x80001384| 0x80001424 => true
+      | 0x8000138c | 0x8000144c => true
       | _ => false
     end | _ => false end.
 End vTaskSwitchContextTime.
@@ -99,21 +99,21 @@ Definition memory_regions
     (reg_init_sp_22241_32 : N)	(* sp *)
     (reg_init_gp_22242_32 : N)	(* gp *)
     := map (fun x => (4, x)) [
-		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4;
 		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0xc;
-		mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30;
-		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8;
-		reg_init_sp_22241_32 + 0xfffffffc;
-		reg_init_sp_22241_32 + 0xfffffff8;
-		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0x4;
-		reg_init_gp_22242_32 + 0xfffff874;
-		reg_init_gp_22242_32 + 0xfffff880;
-		reg_init_gp_22242_32 + 0xfffff860;
-		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffedc;
 		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30];
+		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0x4;
+		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffedc;
 		reg_init_gp_22242_32 + 0xfffff898;
+		reg_init_gp_22242_32 + 0xfffff860;
 		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0xc;
-		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4
+		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4;
+		reg_init_sp_22241_32 + 0xfffffff8;
+		reg_init_gp_22242_32 + 0xfffff874;
+		mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30;
+		reg_init_sp_22241_32 + 0xfffffffc;
+		reg_init_gp_22242_32 + 0xfffff880;
+		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4;
+		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8
       ].
 
 Definition noverlaps
@@ -157,7 +157,7 @@ match t with (Addr a, s) :: t' => match a with
   (* 0x8000141c *)       time_mem + time_mem + 0
                        )
 		)
-| 0x80001384 | 0x80001424  => Some (exists mem, s V_MEM32 = Ⓜmem /\
+0x8000138c | 0x8000144c => Some (exists mem, s V_MEM32 = Ⓜmem /\
 			time_of_vTaskSwitchContext t mem reg_init_sp_22241_32 reg_init_gp_22242_32)
 | _ => None end | _ => None end
 .

@@ -23,7 +23,7 @@ Module vTaskSuspendAllTime <: TimingModule.
   
   Definition exits (t:trace) : bool :=
       match t with (Addr a,_)::_ => match a with
-      | 0x80000d14 => true
+      | 0x80000d20 => true
       | _ => false
     end | _ => false end.
 End vTaskSuspendAllTime.
@@ -58,7 +58,7 @@ Definition vTaskSuspendAll_timing_invs
         (t : trace) : option Prop :=
 match t with (Addr a, s) :: t' => match a with
 | 0x80000d14 => Some (cycle_count_of_trace t' = 0)
-| 0x80000d14  => Some (time_of_vTaskSuspendAll t)
+0x80000d20 => Some (time_of_vTaskSuspendAll t)
 | _ => None end | _ => None end
 .
 

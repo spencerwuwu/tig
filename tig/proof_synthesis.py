@@ -375,6 +375,7 @@ def gen_proof_memory_regions(sym_info: Dict[str, Any],
 
 def gen_proof_invariants(target_name: str,
                          entry_point: int, 
+                         end_addrs_str: str,
                          timetree_root: TimingTreeNode,
                          sym_info: Dict[str, Any],
                          sym_traces: List[Dict], 
@@ -452,9 +453,7 @@ def gen_proof_invariants(target_name: str,
             s += invariants[mp] + "\n\t\t)\n"
         return s
     def _gen_ending():
-        end_addrs = set(t["history"][-1] for t in sym_traces)
-        end_conds = "".join([f"| {hex(addr)} " for addr in end_addrs])
-        s  = f"{end_conds} => Some ("
+        s  = f"{end_addrs_str} => Some ("
         s +=  "exists mem, s V_MEM32 = Ⓜmem /\\\n" if has_mem_ref else ""
         s +=  "\t\t\t" if has_mem_ref else ""
         s += f"time_of_{target_name} t"
@@ -492,7 +491,12 @@ def synthesize_noverlaps_proof(function: Function,
                                verbose: bool=False
                               )-> str:
     entry_addr = hex(function.entry_point)
-    end_addrs = "| ".join(set(hex(t["history"][-1]) for t in sym_traces))
+    end_addrs = []
+    for t in sym_traces:
+        instr = function.get_block(t["history"][-1]).instructions[-1].offset
+        if instr not in end_addrs:
+            end_addrs.append(instr) 
+    end_addrs_str = " | ".join(hex(addr) for addr in end_addrs)
 
     root = build_timing_tree(function, 
                              [t["history"] for t in sym_traces], 
@@ -504,7 +508,7 @@ def synthesize_noverlaps_proof(function: Function,
 
     memory_regions = gen_proof_memory_regions(sym_info, sym_traces, verbose=verbose)
 
-    invariants = gen_proof_invariants(function.name, function.entry_point,
+    invariants = gen_proof_invariants(function.name, function.entry_point, end_addrs_str,
                                                root, sym_info, sym_traces, verbose)
 
     # TODO:
@@ -517,7 +521,7 @@ def synthesize_noverlaps_proof(function: Function,
     return noverlaps_temp.render(
         func_name=function.name,
         entry_addr=entry_addr,
-        end_addrs=end_addrs,
+        end_addrs=end_addrs_str,
         postcondition=postcondition,
         memory_regions=memory_regions,
         invariants=invariants,

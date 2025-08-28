@@ -23,7 +23,7 @@ Module uxListRemoveTime <: TimingModule.
   
   Definition exits (t:trace) : bool :=
       match t with (Addr a,_)::_ => match a with
-      | 0x80002460 => true
+      | 0x80002470 => true
       | _ => false
     end | _ => false end.
 End uxListRemoveTime.
@@ -57,13 +57,13 @@ Definition memory_regions
     (mem : addr -> N)
     (reg_init_a0_22245_32 : N)	(* a0 *)
     := map (fun x => (4, x)) [
-		reg_init_a0_22245_32 + 0x8;
-		reg_init_a0_22245_32 + 0x4;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10];
-		mem Ⓓ[reg_init_a0_22245_32 + 0x8] + 0x4;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4;
 		mem Ⓓ[reg_init_a0_22245_32 + 0x4] + 0x8;
-		reg_init_a0_22245_32 + 0x10
+		reg_init_a0_22245_32 + 0x4;
+		mem Ⓓ[reg_init_a0_22245_32 + 0x8] + 0x4;
+		reg_init_a0_22245_32 + 0x10;
+		reg_init_a0_22245_32 + 0x8;
+		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4;
+		mem Ⓓ[reg_init_a0_22245_32 + 0x10]
       ].
 
 Definition noverlaps
@@ -94,7 +94,7 @@ match t with (Addr a, s) :: t' => match a with
   (* 0x8000245c *)       time_mem + 0
                        )
 		)
-| 0x80002460  => Some (exists mem, s V_MEM32 = Ⓜmem /\
+0x80002470 => Some (exists mem, s V_MEM32 = Ⓜmem /\
 			time_of_uxListRemove t mem reg_init_a0_22245_32)
 | _ => None end | _ => None end
 .
