@@ -37,8 +37,8 @@ Definition CLZ (n : N) : N := clz(n) 32.
 (* Postcondition *)
 Definition time_of_vTaskSwitchContext (t : trace)
     (mem : addr -> N)
-    reg_init_sp_22241_32
-    reg_init_gp_22242_32
+    (reg_init_sp_22241_32 : N)	(* sp *)
+    (reg_init_gp_22242_32 : N)	(* gp *)
   : Prop :=
     cycle_count_of_trace t =
 (* 0x8000137c *)   time_mem
@@ -99,21 +99,21 @@ Definition memory_regions
     (reg_init_sp_22241_32 : N)	(* sp *)
     (reg_init_gp_22242_32 : N)	(* gp *)
     := map (fun x => (4, x)) [
-		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0xc;
 		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30];
 		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0x4;
-		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffedc;
-		reg_init_gp_22242_32 + 0xfffff898;
-		reg_init_gp_22242_32 + 0xfffff860;
-		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0xc;
-		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4;
-		reg_init_sp_22241_32 + 0xfffffff8;
-		reg_init_gp_22242_32 + 0xfffff874;
 		mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30;
+		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0xc;
+		reg_init_gp_22242_32 + 0xfffff860;
 		reg_init_sp_22241_32 + 0xfffffffc;
+		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8;
+		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4;
+		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0xc;
+		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffedc;
 		reg_init_gp_22242_32 + 0xfffff880;
 		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4;
-		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8
+		reg_init_sp_22241_32 + 0xfffffff8;
+		reg_init_gp_22242_32 + 0xfffff874;
+		reg_init_gp_22242_32 + 0xfffff898
       ].
 
 Definition noverlaps
@@ -169,4 +169,20 @@ Definition lifted_vTaskSwitchContext : program :=
 
 
 (* Proof *)
-(* TODO *)
+Theorem vTaskSwitchContext_timing:
+  forall s t s' x' mem sp gp
+    (ENTRY: startof t (x',s') = (Addr entry_addr, s))
+    (MDL: models rvtypctx s)
+    (NVL: noverlaps mem sp gp)
+    (MEM: s V_MEM32 = Ⓜmem)
+    (SP: s R_SP = Ⓓsp)
+    (GP: s R_GP = Ⓓgp),
+  satisfies_all
+    lifted_vTaskSwitchContext
+    (vTaskSwitchContext_timing_invs t mem sp gp)
+    exists
+ ((x',s')::t').
+Proof using.
+  (* TODO *)
+  Admitted.
+Qed.

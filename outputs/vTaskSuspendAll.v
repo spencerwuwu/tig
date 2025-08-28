@@ -69,4 +69,17 @@ Definition lifted_vTaskSuspendAll : program :=
 
 
 (* Proof *)
-(* TODO *)
+Theorem vTaskSuspendAll_timing:
+  forall s t s' x'
+    (ENTRY: startof t (x',s') = (Addr entry_addr, s))
+    (MDL: models rvtypctx s)
+,
+  satisfies_all
+    lifted_vTaskSuspendAll
+    (vTaskSuspendAll_timing_invs t)
+    exists
+ ((x',s')::t').
+Proof using.
+  (* TODO *)
+  Admitted.
+Qed.

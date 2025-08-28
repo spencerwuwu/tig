@@ -37,7 +37,7 @@ Definition CLZ (n : N) : N := clz(n) 32.
 (* Postcondition *)
 Definition time_of_uxListRemove (t : trace)
     (mem : addr -> N)
-    reg_init_a0_22245_32
+    (reg_init_a0_22245_32 : N)	(* a0 *)
   : Prop :=
     cycle_count_of_trace t =
 (* 0x80002440 *)   time_mem + time_mem + time_mem + time_mem + time_mem + time_mem
@@ -58,12 +58,12 @@ Definition memory_regions
     (reg_init_a0_22245_32 : N)	(* a0 *)
     := map (fun x => (4, x)) [
 		mem Ⓓ[reg_init_a0_22245_32 + 0x4] + 0x8;
-		reg_init_a0_22245_32 + 0x4;
 		mem Ⓓ[reg_init_a0_22245_32 + 0x8] + 0x4;
 		reg_init_a0_22245_32 + 0x10;
+		mem Ⓓ[reg_init_a0_22245_32 + 0x10];
+		reg_init_a0_22245_32 + 0x4;
 		reg_init_a0_22245_32 + 0x8;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10]
+		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4
       ].
 
 Definition noverlaps
@@ -106,4 +106,19 @@ Definition lifted_uxListRemove : program :=
 
 
 (* Proof *)
-(* TODO *)
+Theorem uxListRemove_timing:
+  forall s t s' x' mem a0
+    (ENTRY: startof t (x',s') = (Addr entry_addr, s))
+    (MDL: models rvtypctx s)
+    (NVL: noverlaps mem a0)
+    (MEM: s V_MEM32 = Ⓜmem)
+    (A0: s R_A0 = Ⓓa0),
+  satisfies_all
+    lifted_uxListRemove
+    (uxListRemove_timing_invs t mem a0)
+    exists
+ ((x',s')::t').
+Proof using.
+  (* TODO *)
+  Admitted.
+Qed.
