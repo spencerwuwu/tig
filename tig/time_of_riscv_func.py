@@ -62,7 +62,7 @@ def time_of_riscv_instr(mnem, args, store_name, ML):
         #time = f"5 + ({ML} - 2)"
         time = "time_mem"
     elif mnem in ["beq", "bne", "blt", "bge", "bltu", "bgeu"]:
-        true_time = f"5 + ({ML} - 1)"
+        true_time = f"time_branch"
         false_time = "3"
         # NOTE: not using in time_of_BasicBlock
         op1 = "0" if args[0] == "zero" else f"{store_name} {args[0]}"

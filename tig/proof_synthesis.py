@@ -110,6 +110,57 @@ def build_timing_tree(function,
     return root_node
 
 
+def _syn_branch_condition(node: TimingTreeNode, 
+                          all_traces: List[List[int]],
+                          cur_trace: List[int]=[],
+                          formula: str="",
+                          indent: str="",
+                          findent: str="",
+                          depth: int=0,
+                          end_addr: int|None=None,
+                          verbose: bool=False
+                          )-> str:
+    formula += f"\n{findent}+ (if {node.get_constraint_repr()}"
+
+    if verbose:
+        print(f"\n{indent}- True : ", end="")
+
+    formula += f"\n{findent}  then"
+    formula += f"\n{findent}    {node.true_time} + "
+    if node.true_child:
+        if end_addr is not None:
+            true_time = partial_dfs_timing_tree(node.true_child, end_addr,
+                                                cur_trace+[node.true_child.block.start_vaddr], 
+                                                all_traces, depth + 2, verbose)
+        else:
+            true_time = dfs_timing_tree(node.true_child, 
+                                        cur_trace+[node.true_child.block.start_vaddr], 
+                                        all_traces, depth + 2)
+    else:
+        true_time = f"\n{findent}  time_inf"
+    formula += f"{true_time}"
+
+    if verbose:
+        print(f"\n{indent}- False: ", end="")
+
+    formula += f"\n{findent}  else"
+    formula += f"\n{findent}    {node.false_time} + "
+    if node.false_child:
+        if end_addr is not None:
+            false_time = partial_dfs_timing_tree(node.false_child, end_addr,
+                                                 cur_trace+[node.false_child.block.start_vaddr], 
+                                                 all_traces, depth + 2, verbose)
+        else:
+            false_time = dfs_timing_tree(node.false_child, 
+                                         cur_trace+[node.false_child.block.start_vaddr], 
+                                         all_traces, depth + 2, verbose)
+    else:
+        false_time = f"\n{findent}  time_inf"
+    formula += f"{false_time}"
+    formula += f"\n{findent}  )"
+    return formula
+
+
 def dfs_timing_tree(node: TimingTreeNode, 
                     cur_trace: List[int]=[], 
                     all_traces: List[List[int]]=[], 
@@ -127,6 +178,7 @@ def dfs_timing_tree(node: TimingTreeNode,
     if verbose:
         print(f"{node.block.start_vaddr:#x} ", end="")
 
+    # NOTE: disable the indentation (not sure which has better readability)
     indent = "  " * depth 
     addr_indent = len("(* 0x80001234 *) ")
     addr_text = f"(* {node.block.start_vaddr:#x} *)"
@@ -151,47 +203,12 @@ def dfs_timing_tree(node: TimingTreeNode,
 
     if node.is_branching:
         formula = _syn_branch_condition(node, all_traces, cur_trace, 
-                                        formula, indent, findent, depth, verbose)
+                                        formula, indent, findent, depth, None, verbose)
     else:
         if node.child:
-            child_time = dfs_timing_tree(node.child, cur_trace+[node.child.block.start_vaddr], all_traces, depth + 1)
+            child_time = dfs_timing_tree(node.child, cur_trace+[node.child.block.start_vaddr], 
+                                         all_traces, depth, verbose)
             formula += f" +{child_time}"
-    return formula
-
-
-def _syn_branch_condition(node: TimingTreeNode, 
-                          all_traces: List[List[int]],
-                          cur_trace: List[int]=[],
-                          formula: str="",
-                          indent: str="",
-                          findent: str="",
-                          depth: int=0,
-                          verbose: bool=False
-                          )-> str:
-    formula += f"\n{findent}+ (if {node.get_constraint_repr()}"
-
-    if verbose:
-        print(f"\n{indent}- True : ", end="")
-
-    formula += f"\n{findent}  then"
-    formula += f"\n{findent}    {node.true_time} + "
-    if node.true_child:
-        true_time = dfs_timing_tree(node.true_child, cur_trace+[node.true_child.block.start_vaddr], all_traces, depth + 2)
-    else:
-        true_time = f"\n{findent}  time_inf"
-    formula += f"{true_time}"
-
-    if verbose:
-        print(f"\n{indent}- False: ", end="")
-
-    formula += f"\n{findent}  else"
-    formula += f"\n{findent}    {node.false_time} + "
-    if node.false_child:
-        false_time = dfs_timing_tree(node.false_child, cur_trace+[node.false_child.block.start_vaddr], all_traces, depth + 2)
-    else:
-        false_time = f"\n{findent}  time_inf"
-    formula += f"{false_time}"
-    formula += f"\n{findent}  )"
     return formula
 
 
@@ -214,17 +231,17 @@ def partial_dfs_timing_tree(node: TimingTreeNode,
     if verbose:
         print(f"{node.block.start_vaddr:#x} ", end="")
 
+    # Don't need to include this block as we've reached computing pre-conditions
+    if end_addr == node.block.start_vaddr:
+        if verbose:
+            print(" <REACH>", end="")
+        return "0" 
+
+    # NOTE: disable the indentation (not sure which has better readability)
     indent = "  " * depth 
     addr_indent = len("(* 0x80001234 *) ")
     addr_text = f"(* {node.block.start_vaddr:#x} *)"
     findent = indent + " " * addr_indent
-
-    # TODO: end condition??
-
-    #if not node.block_time:
-    #    if verbose:
-    #        print(f" xxx", end="")
-    #    return f"\n{addr_text} {indent}time_inf"
 
     formula = f"\n{addr_text} {indent}{node.block_time}"
 
@@ -241,7 +258,7 @@ def partial_dfs_timing_tree(node: TimingTreeNode,
         if len(next_addrs) > 1:
             # Need to include branch condition
             formula = _syn_branch_condition(node, all_traces, cur_trace, 
-                                            formula, indent, findent, depth, verbose)
+                                            formula, indent, findent, depth, end_addr, verbose)
         else:
             # Check if it's the false or true branch
             next_addr = next_addrs.pop()
@@ -259,40 +276,15 @@ def partial_dfs_timing_tree(node: TimingTreeNode,
 
             if verbose:
                 print(f"\n{indent}- {msg} ", end="")
-            formula += f"\n{findent}    {trans_time} + "
-            formula += dfs_timing_tree(next_node, cur_trace+[next_addr], all_traces, depth + 2, verbose)
-
-        #formula += f"\n{findent}+ (if {node.get_constraint_repr()}"
-
-        #if verbose:
-        #    print(f"\n{indent}- True : ", end="")
-
-        #formula += f"\n{findent}  then"
-        #formula += f"\n{findent}    {node.true_time} + "
-        #if node.true_child:
-        #    true_time = dfs_timing_tree(node.true_child, 
-        #                                cur_trace+[node.true_child.block.start_vaddr], 
-        #                                all_traces, depth + 2)
-        #else:
-        #    true_time = f"\n{findent}  time_inf"
-        #formula += f"{true_time}"
-
-        #if verbose:
-        #    print(f"\n{indent}- False: ", end="")
-
-        #formula += f"\n{findent}  else"
-        #formula += f"\n{findent}    {node.false_time} + "
-        #if node.false_child:
-        #    false_time = dfs_timing_tree(node.false_child, cur_trace+[node.false_child.block.start_vaddr], all_traces, depth + 2)
-        #else:
-        #    false_time = f"\n{findent}  time_inf"
-        #formula += f"{false_time}"
-        #formula += f"\n{findent}  )"
-
+            formula += " + " + f"\n{findent}  {trans_time} + "
+            formula += partial_dfs_timing_tree(next_node, end_addr, 
+                                               cur_trace+[next_addr], all_traces, depth, verbose)
     else:
         if node.child:
-            child_time = dfs_timing_tree(node.child, cur_trace+[node.child.block.start_vaddr], all_traces, depth + 1)
-            formula += f" +{child_time}"
+            child_time = partial_dfs_timing_tree(node.child, end_addr, 
+                                                 cur_trace+[node.child.block.start_vaddr], 
+                                                 all_traces, depth, verbose)
+            formula += f" + {child_time}"
     return formula
 
 
@@ -300,15 +292,25 @@ def partial_dfs_timing_tree(node: TimingTreeNode,
     ###########################################################################
 """
 
-def _gen_reg_args(sym_info: Dict[str, Any]) -> Tuple[str, str]:
+def _gen_reg_args(sym_info: Dict[str, Any]) -> Tuple[List[str], List[str]]:
     params = []
     variables = []
     for reg in sym_info["registers"]:
         for v in sym_info["variables"]:
             if v.startswith(f"reg_init_{reg.lower()}"):
-                params.append(f"  ({v} : N)\t(* {reg} *)\n")
+                params.append(f"({v} : N)\t(* {reg} *)")
                 variables.append(v)
-    return "".join(params), " ".join(variables)
+    return params, variables
+
+
+def _gen_reg_invariant_comps(sym_info: Dict[str, Any]) -> Dict[str, str]:
+    reg_invs = {}
+    for reg in sym_info["registers"]:
+        cap_reg = reg.upper()
+        for v in sym_info["variables"]:
+            if v.startswith(f"reg_init_{reg.lower()}"):
+                reg_invs[cap_reg] = f"s R_{cap_reg} = Ⓓ{v}"
+    return reg_invs
 
 
 def gen_proof_postcondition(target_name: str,
@@ -322,16 +324,19 @@ def gen_proof_postcondition(target_name: str,
         print(f"+++ Timing tree for {target_name} +++")
         print("-- Guard tree")
 
-    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces)
-    if has_mem_ref and len(sym_info["branch_constraints"]) > 0:
-        mem_param = "  (mem : addr -> N)\n"
+    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces) \
+            and len(sym_info["branch_constraints"])
+    if has_mem_ref > 0:
+        mem_param = "    (mem : addr -> N)\n"
     else:
         mem_param = ""
+
+    _, var_regs = _gen_reg_args(sym_info)
 
     formula = dfs_timing_tree(timetree_root, [entry_point], [t["history"] for t in sym_traces], 1, verbose)
     time_of  = f"Definition time_of_{target_name} (t : trace)\n"
     time_of += mem_param
-    time_of += _gen_reg_args(sym_info)[0]
+    time_of += "    " + "\n    ".join(var_regs) + "\n" if var_regs else ""
     time_of += "  : Prop :=\n"
     time_of += f"    cycle_count_of_trace t ="
     time_of += formula
@@ -354,15 +359,15 @@ def gen_proof_memory_regions(sym_info: Dict[str, Any],
     param_regs, var_regs = _gen_reg_args(sym_info)
 
     text  = "Definition memory_regions\n"
-    text += "  (mem : addr -> N)\n" 
-    text += param_regs
+    text += "    (mem : addr -> N)\n" 
+    text += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
     text += "    := map (fun x => (4, x)) [\n"
     text += "\t\t" + ";\n\t\t".join(memory_regions)
     text += "\n"
     text += "      ].\n\n"
     text += "Definition noverlaps\n"
-    text += "  (mem : addr -> N)\n" 
-    text += param_regs
+    text += "    (mem : addr -> N)\n" 
+    text += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
     text += f"    :=  create_noverlaps (memory_regions mem {var_regs})."
 
     return text
@@ -374,11 +379,12 @@ def gen_proof_invariants(target_name: str,
                          sym_info: Dict[str, Any],
                          sym_traces: List[Dict], 
                          verbose: bool=False):
+    if verbose:
+        print(f"+++ Partial timing tree for {target_name} +++")
 
     # Determine merging points
     covered_blocks = set(sym_traces[0]["history"])
     merge_points = set()
-
     for t in sym_traces[1:]:
         has_split = False
         for b in t["history"]:
@@ -398,7 +404,81 @@ def gen_proof_invariants(target_name: str,
             print([hex(b) for b in t["history"]])
         print(f"Merge points: {[hex(mp) for mp in merge_points]}")
 
+    # Generate invariant for each merging point
+    invariants = {}
+    for merge_point in merge_points:
+        if verbose:
+            print(f"\n=== Invariant for block {hex(merge_point)} ===")
 
+        formula = partial_dfs_timing_tree(timetree_root, merge_point, [entry_point], 
+                                         [t["history"] for t in sym_traces if merge_point in t["history"]], 
+                                          1, verbose)
+        # Increase padding
+        formula = "\n".join("  " + line for line in formula.split("\n"))
+        invariants[merge_point] = formula
+
+    # Start proof generation
+    param_regs, var_regs = _gen_reg_args(sym_info)
+    reg_invs = _gen_reg_invariant_comps(sym_info)
+
+    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces) \
+            and len(sym_info["branch_constraints"])
+    if has_mem_ref:
+        mem_param = "(mem : addr -> N)\n"
+    else:
+        mem_param = ""
+
+    if has_mem_ref:
+        no_overlaps_cond = f"noverlaps mem " + " ".join(var_regs)
+    else:
+        no_overlaps_cond = ""
+
+    def _gen_entry():
+        s  = f"| {hex(entry_point)} => Some ("
+        if has_mem_ref:
+            s +=  " /\\\n\t\t\t".join(reg_invs.values()) + " /\\\n\t\t\t" if reg_invs else ""
+            s +=  "s V_MEM32 = Ⓜmem /\\\n"
+            s += f"\t\t\t{no_overlaps_cond} /\\\n\t\t\t"
+        s +=  "cycle_count_of_trace t' = 0"
+        s +=  ")\n"
+        return s
+    def _gen_merge_points():
+        s = ""
+        for mp in merge_points:
+            s += f"| {hex(mp)} => Some ("
+            s +=  "exists mem, s V_MEM32 = Ⓜmem /\\\n" if has_mem_ref else ""
+            s += f"\t\t\t{no_overlaps_cond} /\\\n" if has_mem_ref else ""
+            s +=  "\t\t\tcycle_count_of_trace t' = "
+            s += invariants[mp] + "\n\t\t)\n"
+        return s
+    def _gen_ending():
+        end_addrs = set(t["history"][-1] for t in sym_traces)
+        end_conds = "".join([f"| {hex(addr)} " for addr in end_addrs])
+        s  = f"{end_conds} => Some ("
+        s +=  "exists mem, s V_MEM32 = Ⓜmem /\\\n" if has_mem_ref else ""
+        s +=  "\t\t\t" if has_mem_ref else ""
+        s += f"time_of_{target_name} t"
+        s += " mem" if has_mem_ref else ""
+        s += " " + " ".join(var_regs) if var_regs else ""
+        s += ")\n"
+        s += "| _ => None end | _ => None end\n"
+        return s
+
+    time_of  = f"Definition {target_name}_timing_invs \n"
+    time_of += "    " + mem_param
+    time_of += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
+    time_of += "    (t : trace) : option Prop :=\n"
+    time_of += "match t with (Addr a, s) :: t' => match a with\n"
+    time_of += _gen_entry()
+    time_of += _gen_merge_points()
+    time_of += _gen_ending()
+    time_of += "."
+
+    if verbose:
+        print("\n\n-- Formula:\n")
+        print(time_of)
+        print()
+    return time_of
 
 
 """
@@ -425,10 +505,9 @@ def synthesize_noverlaps_proof(function: Function,
     memory_regions = gen_proof_memory_regions(sym_info, sym_traces, verbose=verbose)
 
     invariants = gen_proof_invariants(function.name, function.entry_point,
-                                               root, sym_info, sym_traces, verbose=verbose)
+                                               root, sym_info, sym_traces, verbose)
 
     # TODO:
-    invariants = "(* TODO *)"
     proof = "(* TODO *)"
 
     # Loading Jinja modules and templates

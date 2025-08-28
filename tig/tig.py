@@ -76,11 +76,11 @@ def main():
 
     rocq = synthesize_noverlaps_proof(func, result["info"], result["results"], verbose=False)
 
-    #if args.out_file is None:
-    #    print(rocq)
-    #else:
-    #    with open(args.out_file, "w") as file:
-    #        file.write(rocq)
+    if args.out_file is None:
+        print(rocq)
+    else:
+        with open(args.out_file, "w") as file:
+            file.write(rocq)
 
 
 if __name__ == "__main__":

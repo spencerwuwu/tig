@@ -15,17 +15,17 @@ Definition time_inf : N :=
 
 (* Common for all timing proofs - facilitates automation *)
 Module {{func_name}}Time <: TimingModule.
-Definition time_of_addr (s : store) (a : addr) : N :=
-    match neorv32_cycles_upper_bound ML s (RTOSDemo_NoAsserts_Clz a) with
-    | Some x => x | _ => 999 end.
-
-Definition entry_addr : N := {{entry_addr}}.
-
-Definition exits (t:trace) : bool :=
-    match t with (Addr a,_)::_ => match a with
-    | {{end_addrs}} => true
-    | _ => false
-  end | _ => false end.
+  Definition time_of_addr (s : store) (a : addr) : N :=
+      match neorv32_cycles_upper_bound ML s (RTOSDemo_NoAsserts_Clz a) with
+      | Some x => x | _ => 999 end.
+  
+  Definition entry_addr : N := {{entry_addr}}.
+  
+  Definition exits (t:trace) : bool :=
+      match t with (Addr a,_)::_ => match a with
+      | {{end_addrs}} => true
+      | _ => false
+    end | _ => false end.
 End {{func_name}}Time.
 Module {{func_name}}Auto := TimingAutomation {{func_name}}Time.
 Import {{func_name}}Time {{func_name}}Auto.
