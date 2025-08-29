@@ -23,7 +23,7 @@ Module {{func_name}}Time <: TimingModule.
   
   Definition exits (t:trace) : bool :=
       match t with (Addr a,_)::_ => match a with
-      | {{end_addrs}} => true
+      {{end_addrs}} => true
       | _ => false
     end | _ => false end.
 End {{func_name}}Time.

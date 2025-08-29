@@ -315,6 +315,12 @@ def _gen_reg_invariant_comps(sym_info: Dict[str, Any]) -> Dict[str, str]:
     return reg_invs
 
 
+def _has_mem_ref(sym_info: Dict[str, Any],
+                 sym_traces: List[Dict]) -> bool:
+    return any(len(t["memory_regions"]) > 0 for t in sym_traces) \
+            and len(sym_info["branch_constraints"]) > 0
+
+
 def gen_proof_postcondition(target_name: str,
                             entry_point: int, 
                             timetree_root: TimingTreeNode,
@@ -326,8 +332,7 @@ def gen_proof_postcondition(target_name: str,
         print(f"+++ Timing tree for {target_name} +++")
         print("-- Guard tree")
 
-    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces) \
-            and len(sym_info["branch_constraints"])
+    has_mem_ref = _has_mem_ref(sym_info, sym_traces)
     if has_mem_ref > 0:
         mem_param = "    (mem : addr -> N)\n"
     else:
@@ -336,6 +341,7 @@ def gen_proof_postcondition(target_name: str,
     param_regs,_,_ = _gen_reg_args(sym_info)
 
     formula = dfs_timing_tree(timetree_root, [entry_point], [t["history"] for t in sym_traces], 1, verbose)
+
     time_of  = f"Definition time_of_{target_name} (t : trace)\n"
     time_of += mem_param
     time_of += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
@@ -370,7 +376,7 @@ def gen_proof_memory_regions(sym_info: Dict[str, Any],
     text += "Definition noverlaps\n"
     text += "    (mem : addr -> N)\n" 
     text += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
-    text += f"    :=  create_noverlaps (memory_regions mem {var_regs})."
+    text += f"    :=  create_noverlaps (memory_regions mem {' '.join(var_regs)})."
 
     return text
 
@@ -424,8 +430,7 @@ def gen_proof_invariants(target_name: str,
     param_regs, var_regs,_ = _gen_reg_args(sym_info)
     reg_invs = _gen_reg_invariant_comps(sym_info)
 
-    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces) \
-            and len(sym_info["branch_constraints"])
+    has_mem_ref = _has_mem_ref(sym_info, sym_traces)
     if has_mem_ref:
         mem_param = "(mem : addr -> N)\n"
     else:
@@ -489,8 +494,7 @@ def gen_proof_procedure(target_name: str,
     _,_, regs = _gen_reg_args(sym_info)
     # NOTE: could use this but not necessary for now for simplicity
     # reg_invs = _gen_reg_invariant_comps(sym_info)
-    has_mem_ref = any(len(t["memory_regions"]) > 0 for t in sym_traces) \
-            and len(sym_info["branch_constraints"])
+    has_mem_ref = _has_mem_ref(sym_info, sym_traces)
 
     s  = f"Theorem {target_name}_timing:\n"
     s +=  "  forall s t s' x'"
@@ -499,17 +503,17 @@ def gen_proof_procedure(target_name: str,
     s +=  "\n"
     s +=  "    (ENTRY: startof t (x',s') = (Addr entry_addr, s))\n"
     s +=  "    (MDL: models rvtypctx s)\n"
-    s +=  "    (NVL: noverlaps mem " + " ".join(regs) + ")\n" if has_mem_ref else ""
+    s +=  "    (NVL: create_noverlaps (memory_regions mem " + " ".join(regs) + "))\n" if has_mem_ref else ""
     s +=  "    (MEM: s V_MEM32 = Ⓜmem)" if has_mem_ref else ""
     s +=  "\n" + "\n".join(f"    ({r.upper()}: s R_{r.upper()} = Ⓓ{r})" for r in regs) if regs else ""
     s +=  ",\n"
     s +=  "  satisfies_all\n"
     s += f"    lifted_{target_name}\n"
-    s += f"    ({target_name}_timing_invs t"
+    s += f"    ({target_name}_timing_invs"
     s +=  " mem" if has_mem_ref else ""
     s +=  " " + " ".join(regs) if regs else ""
     s += ")\n"
-    s += "    exists\n ((x',s')::t').\n"
+    s += "    exits\n ((x',s')::t).\n"
     s += "Proof using.\n"
     s += "  (* TODO *)\n  Admitted.\n"
     s += "Qed.\n"
@@ -518,6 +522,7 @@ def gen_proof_procedure(target_name: str,
 
 
 """
+         (NVL : create_noverlaps (memory_regions base_mem a0))
     ###########################################################################
 """
 
@@ -533,7 +538,7 @@ def synthesize_noverlaps_proof(function: Function,
         instr = function.get_block(t["history"][-1]).instructions[-1].offset
         if instr not in end_addrs:
             end_addrs.append(instr) 
-    end_addrs_str = " | ".join(hex(addr) for addr in end_addrs)
+    end_addrs_str = "| " + " | ".join(hex(addr) for addr in end_addrs)
 
     root = build_timing_tree(function, 
                              [t["history"] for t in sym_traces], 
@@ -543,7 +548,10 @@ def synthesize_noverlaps_proof(function: Function,
     postcondition = gen_proof_postcondition(function.name, function.entry_point,
                                                root, sym_info, sym_traces, verbose=verbose)
 
-    memory_regions = gen_proof_memory_regions(sym_info, sym_traces, verbose=verbose)
+    if _has_mem_ref(sym_info, sym_traces):
+        memory_regions = gen_proof_memory_regions(sym_info, sym_traces, verbose=verbose)
+    else:
+        memory_regions = ""
 
     invariants = gen_proof_invariants(function.name, function.entry_point, end_addrs_str,
                                                root, sym_info, sym_traces, verbose)

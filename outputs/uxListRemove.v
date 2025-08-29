@@ -57,19 +57,19 @@ Definition memory_regions
     (mem : addr -> N)
     (reg_init_a0_22245_32 : N)	(* a0 *)
     := map (fun x => (4, x)) [
-		mem Ⓓ[reg_init_a0_22245_32 + 0x4] + 0x8;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x8] + 0x4;
-		reg_init_a0_22245_32 + 0x10;
 		mem Ⓓ[reg_init_a0_22245_32 + 0x10];
-		reg_init_a0_22245_32 + 0x4;
+		mem Ⓓ[reg_init_a0_22245_32 + 0x4] + 0x8;
+		reg_init_a0_22245_32 + 0x10;
 		reg_init_a0_22245_32 + 0x8;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4
+		mem Ⓓ[reg_init_a0_22245_32 + 0x8] + 0x4;
+		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4;
+		reg_init_a0_22245_32 + 0x4
       ].
 
 Definition noverlaps
     (mem : addr -> N)
     (reg_init_a0_22245_32 : N)	(* a0 *)
-    :=  create_noverlaps (memory_regions mem ['reg_init_a0_22245_32']).
+    :=  create_noverlaps (memory_regions mem reg_init_a0_22245_32).
 
 
 (* Invariants *)
@@ -94,7 +94,7 @@ match t with (Addr a, s) :: t' => match a with
   (* 0x8000245c *)       time_mem + 0
                        )
 		)
-0x80002470 => Some (exists mem, s V_MEM32 = Ⓜmem /\
+| 0x80002470 => Some (exists mem, s V_MEM32 = Ⓜmem /\
 			time_of_uxListRemove t mem reg_init_a0_22245_32)
 | _ => None end | _ => None end
 .
@@ -110,14 +110,14 @@ Theorem uxListRemove_timing:
   forall s t s' x' mem a0
     (ENTRY: startof t (x',s') = (Addr entry_addr, s))
     (MDL: models rvtypctx s)
-    (NVL: noverlaps mem a0)
+    (NVL: create_noverlaps (memory_regions mem a0))
     (MEM: s V_MEM32 = Ⓜmem)
     (A0: s R_A0 = Ⓓa0),
   satisfies_all
     lifted_uxListRemove
-    (uxListRemove_timing_invs t mem a0)
-    exists
- ((x',s')::t').
+    (uxListRemove_timing_invs mem a0)
+    exits
+ ((x',s')::t).
 Proof using.
   (* TODO *)
   Admitted.

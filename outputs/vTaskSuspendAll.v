@@ -42,15 +42,7 @@ Definition time_of_vTaskSuspendAll (t : trace)
 
 
 (* Memory Regions *)
-Definition memory_regions
-    (mem : addr -> N)
-    := map (fun x => (4, x)) [
-		reg_init_gp_22242_32 + 0xfffff860
-      ].
 
-Definition noverlaps
-    (mem : addr -> N)
-    :=  create_noverlaps (memory_regions mem []).
 
 
 (* Invariants *)
@@ -58,7 +50,7 @@ Definition vTaskSuspendAll_timing_invs
         (t : trace) : option Prop :=
 match t with (Addr a, s) :: t' => match a with
 | 0x80000d14 => Some (cycle_count_of_trace t' = 0)
-0x80000d20 => Some (time_of_vTaskSuspendAll t)
+| 0x80000d20 => Some (time_of_vTaskSuspendAll t)
 | _ => None end | _ => None end
 .
 
@@ -76,9 +68,9 @@ Theorem vTaskSuspendAll_timing:
 ,
   satisfies_all
     lifted_vTaskSuspendAll
-    (vTaskSuspendAll_timing_invs t)
-    exists
- ((x',s')::t').
+    (vTaskSuspendAll_timing_invs)
+    exits
+ ((x',s')::t).
 Proof using.
   (* TODO *)
   Admitted.

@@ -99,28 +99,28 @@ Definition memory_regions
     (reg_init_sp_22241_32 : N)	(* sp *)
     (reg_init_gp_22242_32 : N)	(* gp *)
     := map (fun x => (4, x)) [
+		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4;
 		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30];
-		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0x4;
-		mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30;
-		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0xc;
-		reg_init_gp_22242_32 + 0xfffff860;
+		reg_init_sp_22241_32 + 0xfffffff8;
 		reg_init_sp_22241_32 + 0xfffffffc;
 		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x8;
-		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4;
-		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0xc;
+		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0x4;
 		reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffedc;
+		mem Ⓓ[reg_init_gp_22242_32 + 0xffffffec * CLZ(mem Ⓓ[reg_init_gp_22242_32 + 0xfffff880]) + 0xfffffed4] + 0xc;
+		mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30;
+		reg_init_gp_22242_32 + 0xfffff860;
+		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0xc;
 		reg_init_gp_22242_32 + 0xfffff880;
-		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4;
-		reg_init_sp_22241_32 + 0xfffffff8;
+		reg_init_gp_22242_32 + 0xfffff898;
 		reg_init_gp_22242_32 + 0xfffff874;
-		reg_init_gp_22242_32 + 0xfffff898
+		mem Ⓓ[mem Ⓓ[reg_init_gp_22242_32 + 0xfffff898] + 0x30] + 0x4
       ].
 
 Definition noverlaps
     (mem : addr -> N)
     (reg_init_sp_22241_32 : N)	(* sp *)
     (reg_init_gp_22242_32 : N)	(* gp *)
-    :=  create_noverlaps (memory_regions mem ['reg_init_sp_22241_32', 'reg_init_gp_22242_32']).
+    :=  create_noverlaps (memory_regions mem reg_init_sp_22241_32 reg_init_gp_22242_32).
 
 
 (* Invariants *)
@@ -157,7 +157,7 @@ match t with (Addr a, s) :: t' => match a with
   (* 0x8000141c *)       time_mem + time_mem + 0
                        )
 		)
-0x8000138c | 0x8000144c => Some (exists mem, s V_MEM32 = Ⓜmem /\
+| 0x8000138c | 0x8000144c => Some (exists mem, s V_MEM32 = Ⓜmem /\
 			time_of_vTaskSwitchContext t mem reg_init_sp_22241_32 reg_init_gp_22242_32)
 | _ => None end | _ => None end
 .
@@ -173,15 +173,15 @@ Theorem vTaskSwitchContext_timing:
   forall s t s' x' mem sp gp
     (ENTRY: startof t (x',s') = (Addr entry_addr, s))
     (MDL: models rvtypctx s)
-    (NVL: noverlaps mem sp gp)
+    (NVL: create_noverlaps (memory_regions mem sp gp))
     (MEM: s V_MEM32 = Ⓜmem)
     (SP: s R_SP = Ⓓsp)
     (GP: s R_GP = Ⓓgp),
   satisfies_all
     lifted_vTaskSwitchContext
-    (vTaskSwitchContext_timing_invs t mem sp gp)
-    exists
- ((x',s')::t').
+    (vTaskSwitchContext_timing_invs mem sp gp)
+    exits
+ ((x',s')::t).
 Proof using.
   (* TODO *)
   Admitted.
