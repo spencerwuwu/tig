@@ -139,7 +139,7 @@ class SymMemPlugin(SimStatePlugin):
             if v not in self.variables and \
                 v not in self.symbolic_references and \
                 not v.startswith("CLZ"):
-                if not v.startswith("reg_init"):
+                if not v.startswith("reg_init") and not v.startswith("data_init"):
                     raise NotImplementedError(f"Symbolic variable {v} not expected in constraints")
                 self.variables.append(v)
 

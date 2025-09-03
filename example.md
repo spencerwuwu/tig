@@ -66,3 +66,13 @@ Compute merges block -> to generate pre-condition
 -> Partial-DFA
   - include if-constraint content only if it's a splitting point
   - fall through if not a splitting point
+
+## Questions:
+- If no regs, do we still need to prove no-overlaps? -> only when the Post-condition contains variables
+
+convert reg_init_gp_22242_32 + 0xfffff880 to simplier rule
+0xfffff880 -> picane notation "circled-plus/minus"
+  (can be found in `vTaskSwitchContext`)
+
+Notation of reading/storing different bytes (e.g. lbu v.s. lb v.s lw)
+other small bugs
