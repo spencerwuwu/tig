@@ -56,7 +56,7 @@ class SymMemPlugin(SimStatePlugin):
     """ Plugin to track symbolic memory references, path constraints (and more!)
 
     Args:
-        symbolic_references: { <symbolic_var:str>: <symbolic_var:addr> }
+        symbolic_references: { <symbolic_var:str>: (<symbolic_var:addr>, <length:int>) }
         path_constraints:    [ <path_constraint:str> ] 
         branch_constraints:  [ <branch_constraint:ConstraintNode> ]   # shared between states
         recorded_history:    [ <instr_addr:int> ]                     # shared between states
@@ -67,6 +67,7 @@ class SymMemPlugin(SimStatePlugin):
                                                      "write": [<instr_addr:int>]
                                                     }
                              }
+        register_references:           { reg_name: [symbolic_value_repr] }?
 
         - symbolic_references:  store the mapping of a symbolic address to its repr
         - path_constraints:     all constraints generated when sym-exec during each state
@@ -76,6 +77,7 @@ class SymMemPlugin(SimStatePlugin):
         - history:              updates in tig.symbolic_execution.hook_symmem.record_addr, useless for now
         - instruction_args:     repr of symbolic arguments of instructions, used in proof synthesis
         - memory_regions:       tracks the usage of symbolic memory addresses, used in memory_no_overlap proof
+        - registers_references: TODO: add comment 
                                     
     Functions:
     - get_repr(entry: BV) -> str
@@ -84,7 +86,7 @@ class SymMemPlugin(SimStatePlugin):
     - record_memory_read(instr_addr: int, symbolic_addr: BV, symbolic_value: BV) -> str
         * Updates `memory_regions`
         * Record a memory read for address <repr(symbolic_addr)> at <instr_addr> 
-        * Map symbolic_references[symbolic_value: str] = <symbolic_addr: str> .
+        * Map symbolic_references[symbolic_value: str] = <symbolic_addr: str>, <length: int> .
         * Hooked to state.inspect.b("mem_read")
         
     - record_write_read(instr_addr: int, symbolic_addr: BV, symbolic_value: BV) -> str
@@ -119,6 +121,7 @@ class SymMemPlugin(SimStatePlugin):
                  path_constraints=[],
                  branch_constraints=[],
                  recorded_history=[],
+                 register_references={},
                  variables=[],
                  history={}, 
                  instruction_args={},
@@ -128,6 +131,7 @@ class SymMemPlugin(SimStatePlugin):
         self.history = history
         self.path_constraints = path_constraints
         self.branch_constraints = branch_constraints
+        self.register_references = register_references
         self.variables = variables
         self.instruction_args = instruction_args
         self.recorded_history = recorded_history
@@ -139,15 +143,16 @@ class SymMemPlugin(SimStatePlugin):
             if v not in self.variables and \
                 v not in self.symbolic_references and \
                 not v.startswith("CLZ"):
-                if not v.startswith("reg_init") and not v.startswith("data_init"):
+                # TODO: here?
+                if not v.startswith("data_init"):
                     raise NotImplementedError(f"Symbolic variable {v} not expected in constraints")
                 self.variables.append(v)
 
-    def record_memory_read(self, instr_addr: int, symbolic_addr: BV, symbolic_value: BV)-> str:
+    def record_memory_read(self, instr_addr: int, symbolic_addr: BV, symbolic_value: BV, length: int)-> str:
         addr_repr = self.get_repr(symbolic_addr)
         if symbolic_value.depth == 1 and len(symbolic_value.variables) == 1:
             symbolic_name = list(symbolic_value.variables)[0]
-            self.symbolic_references[symbolic_name] = addr_repr
+            self.symbolic_references[symbolic_name] = (addr_repr, length)
         if addr_repr not in self.memory_regions:
             self.memory_regions[addr_repr] = {"read":[instr_addr], "write":[]}
             self._add_variable(symbolic_value)
@@ -164,17 +169,40 @@ class SymMemPlugin(SimStatePlugin):
             self.memory_regions[addr_repr]["write"].append(instr_addr)
         return addr_repr
 
+    def record_register_read(self, reg_name: str, symbolic_value: BV, length: int)-> str:
+        return ""
+    #    if symbolic_value.depth != 1:
+    #        return self.get_repr(symbolic_value)
+    #    if not len(symbolic_value.variables):
+    #        return reg_name
+    #    symbolic_name = list(symbolic_value.variables)[0]
+    #    if symbolic_name in self.symbolic_references:
+    #        # Already recorded
+    #        return self.get_repr(symbolic_value)
+    #    self.symbolic_references[symbolic_name] = (reg_name, length)
+    #    return self.get_repr(symbolic_value)
+
     def copy(self, memo):
         return SymMemPlugin(deepcopy(self.symbolic_references),
                             deepcopy(self.path_constraints),
                             self.branch_constraints,
                             self.recorded_history,
+                            deepcopy(self.register_references),
                             self.variables,
                             deepcopy(self.history),
                             deepcopy(self.instruction_args),
                             deepcopy(self.memory_regions))
 
     def get_repr(self, entry: BV)-> str:
+        def _deref(value: str, length: int)-> str:
+            if length == 1:
+                return f"mem Ⓑ[{value}]"
+            elif length == 2:
+                return f"mem Ⓦ[{value}]"
+            elif length == 4:
+                return f"mem Ⓓ[{value}]"
+            else:
+                raise NotImplementedError(f"Cannot deref memory of length {length}")
         if entry.depth > 1: 
             # Expand non-terminals
             if len(entry.args) > 1:
@@ -197,19 +225,23 @@ class SymMemPlugin(SimStatePlugin):
             # Terminals
             value = entry.args[0]
             if type(value) == str:
-                if re.match(r"((data)|(bss)|(reg))_init_", value):
+                if re.match(r"((data)|(bss))_init_", value):
                     return value
+                elif value.startswith("reg_"):
+                    return self.symbolic_references[value][0]
                 elif "CLZ" in value:
                     match_group = re.match(r"CLZ_{(.+)}.+", value)
                     if not match_group:
                         raise NotImplementedError(f"Cannot parse CLZ symbolic reference {value}")
                     clz_arg = match_group.group(1)
                     if clz_arg in self.symbolic_references:
-                        return f"CLZ(mem Ⓓ[{self.symbolic_references[clz_arg]}])"
+                        content, length = self.symbolic_references[clz_arg]
+                        return f"CLZ({_deref(content, length)})"
                     else:
                         raise NotImplementedError(f"Cannot find symbolic reference for {clz_arg}")
                 else:
-                    return f"mem Ⓓ[{self.symbolic_references[value]}]"
+                    content, length = self.symbolic_references[value]
+                    return f"{_deref(content, length)}"
             else:
                 return f"0x{value:x}"
         

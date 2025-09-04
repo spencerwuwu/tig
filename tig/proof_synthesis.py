@@ -292,26 +292,27 @@ def partial_dfs_timing_tree(node: TimingTreeNode,
     ###########################################################################
 """
 
-def _gen_reg_args(sym_info: Dict[str, Any]) -> Tuple[List[str], List[str], List[str]]:
-    params = []
-    variables = []
-    regs = []
-    for reg in sym_info["registers"]:
-        for v in sym_info["variables"]:
-            if v.startswith(f"reg_init_{reg.lower()}"):
-                params.append(f"({v} : N)\t(* {reg} *)")
-                regs.append(reg.lower())
-                variables.append(v)
-    return params, variables, regs
+#def _gen_reg_args(sym_info: Dict[str, Any]) -> Tuple[List[str], List[str], List[str]]:
+#    params = []
+#    variables = []
+#    regs = []
+#    for reg in sym_info["registers"]:
+#        #for v in sym_info["variables"].keys():
+#        #    if v.startswith(f"reg_init_{reg.lower()}"):
+#        #        params.append(f"({v} : N)\t(* {reg} *)")
+#        #        regs.append(reg.lower())
+#        #        variables.append(v)
+#    return params, variables, regs
+
+def _gen_reg_args(sym_info: Dict[str, Any]) -> List[str]:
+    return [f"({reg} : N)" for reg in sym_info["registers"].keys()]
 
 
 def _gen_reg_invariant_comps(sym_info: Dict[str, Any]) -> Dict[str, str]:
     reg_invs = {}
     for reg in sym_info["registers"]:
         cap_reg = reg.upper()
-        for v in sym_info["variables"]:
-            if v.startswith(f"reg_init_{reg.lower()}"):
-                reg_invs[cap_reg] = f"s R_{cap_reg} = Ⓓ{v}"
+        reg_invs[cap_reg] = f"s R_{cap_reg} = Ⓓ{reg}"
     return reg_invs
 
 
@@ -338,13 +339,13 @@ def gen_proof_postcondition(target_name: str,
     else:
         mem_param = ""
 
-    param_regs,_,_ = _gen_reg_args(sym_info)
+    param_regs = _gen_reg_args(sym_info)
 
     formula = dfs_timing_tree(timetree_root, [entry_point], [t["history"] for t in sym_traces], 1, verbose)
 
     time_of  = f"Definition time_of_{target_name} (t : trace)\n"
     time_of += mem_param
-    time_of += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
+    time_of += "    " + "\n    ".join(param_regs) + "\n" if param_regs and has_mem_ref else ""
     time_of += "  : Prop :=\n"
     time_of += f"    cycle_count_of_trace t ="
     time_of += formula
@@ -364,19 +365,20 @@ def gen_proof_memory_regions(sym_info: Dict[str, Any],
         for m in t["memory_regions"]:
             memory_regions.add((m))
 
-    param_regs, var_regs,_ = _gen_reg_args(sym_info)
+    param_regs = _gen_reg_args(sym_info)
+    has_mem_ref = _has_mem_ref(sym_info, sym_traces)
 
     text  = "Definition memory_regions\n"
     text += "    (mem : addr -> N)\n" 
-    text += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
+    text += "    " + "\n    ".join(param_regs) + "\n" if param_regs and has_mem_ref else ""
     text += "    := map (fun x => (4, x)) [\n"
     text += "\t\t" + ";\n\t\t".join(memory_regions)
     text += "\n"
     text += "      ].\n\n"
     text += "Definition noverlaps\n"
     text += "    (mem : addr -> N)\n" 
-    text += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
-    text += f"    :=  create_noverlaps (memory_regions mem {' '.join(var_regs)})."
+    text += "    " + "\n    ".join(param_regs) + "\n" if param_regs and has_mem_ref else ""
+    text += f"    :=  create_noverlaps (memory_regions mem {' '.join(sym_info['registers'].keys())})."
 
     return text
 
@@ -427,7 +429,8 @@ def gen_proof_invariants(target_name: str,
         invariants[merge_point] = formula
 
     # Start proof generation
-    param_regs, var_regs,_ = _gen_reg_args(sym_info)
+    param_regs = _gen_reg_args(sym_info)
+    var_regs = list(sym_info["registers"].keys())
     reg_invs = _gen_reg_invariant_comps(sym_info)
 
     has_mem_ref = _has_mem_ref(sym_info, sym_traces)
@@ -465,14 +468,14 @@ def gen_proof_invariants(target_name: str,
         s +=  "\t\t\t" if has_mem_ref else ""
         s += f"time_of_{target_name} t"
         s += " mem" if has_mem_ref else ""
-        s += " " + " ".join(var_regs) if var_regs else ""
+        s += " " + " ".join(var_regs) if var_regs and has_mem_ref else ""
         s += ")\n"
         s += "| _ => None end | _ => None end\n"
         return s
 
     time_of  = f"Definition {target_name}_timing_invs \n"
     time_of += "    " + mem_param
-    time_of += "    " + "\n    ".join(param_regs) + "\n" if param_regs else ""
+    time_of += "    " + "\n    ".join(param_regs) + "\n" if param_regs and has_mem_ref else ""
     time_of += "    (t : trace) : option Prop :=\n"
     time_of += "match t with (Addr a, s) :: t' => match a with\n"
     time_of += _gen_entry()
@@ -491,7 +494,7 @@ def gen_proof_procedure(target_name: str,
                         sym_info: Dict[str, Any],
                         sym_traces: List[Dict], 
                         verbose: bool=False):
-    _,_, regs = _gen_reg_args(sym_info)
+    regs = list(sym_info["registers"].keys())
     # NOTE: could use this but not necessary for now for simplicity
     # reg_invs = _gen_reg_invariant_comps(sym_info)
     has_mem_ref = _has_mem_ref(sym_info, sym_traces)
@@ -499,19 +502,19 @@ def gen_proof_procedure(target_name: str,
     s  = f"Theorem {target_name}_timing:\n"
     s +=  "  forall s t s' x'"
     s +=  " mem" if has_mem_ref else ""
-    s +=  " " + " ".join(regs) if regs else "" 
+    s +=  " " + " ".join(regs) if regs and has_mem_ref else "" 
     s +=  "\n"
     s +=  "    (ENTRY: startof t (x',s') = (Addr entry_addr, s))\n"
     s +=  "    (MDL: models rvtypctx s)\n"
     s +=  "    (NVL: create_noverlaps (memory_regions mem " + " ".join(regs) + "))\n" if has_mem_ref else ""
     s +=  "    (MEM: s V_MEM32 = Ⓜmem)" if has_mem_ref else ""
-    s +=  "\n" + "\n".join(f"    ({r.upper()}: s R_{r.upper()} = Ⓓ{r})" for r in regs) if regs else ""
+    s +=  "\n" + "\n".join(f"    ({r.upper()}: s R_{r.upper()} = Ⓓ{r})" for r in regs) if regs and has_mem_ref else ""
     s +=  ",\n"
     s +=  "  satisfies_all\n"
     s += f"    lifted_{target_name}\n"
     s += f"    ({target_name}_timing_invs"
     s +=  " mem" if has_mem_ref else ""
-    s +=  " " + " ".join(regs) if regs else ""
+    s +=  " " + " ".join(regs) if regs and has_mem_ref else ""
     s += ")\n"
     s += "    exits\n ((x',s')::t).\n"
     s += "Proof using.\n"

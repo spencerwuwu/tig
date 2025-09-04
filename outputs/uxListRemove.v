@@ -37,11 +37,11 @@ Definition CLZ (n : N) : N := clz(n) 32.
 (* Postcondition *)
 Definition time_of_uxListRemove (t : trace)
     (mem : addr -> N)
-    (reg_init_a0_22245_32 : N)	(* a0 *)
+    (a0 : N)
   : Prop :=
     cycle_count_of_trace t =
 (* 0x80002440 *)   time_mem + time_mem + time_mem + time_mem + time_mem + time_mem
-                   + (if negb(mem Ⓓ[mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4] =? reg_init_a0_22245_32)
+                   + (if negb(mem Ⓓ[mem Ⓓ[a0 + 0x10] + 0x4] =? a0)
                      then
                        time_branch + 
 (* 0x80002460 *)       time_mem + time_mem + 2 + time_mem + time_branch
@@ -55,38 +55,38 @@ Definition time_of_uxListRemove (t : trace)
 (* Memory Regions *)
 Definition memory_regions
     (mem : addr -> N)
-    (reg_init_a0_22245_32 : N)	(* a0 *)
+    (a0 : N)
     := map (fun x => (4, x)) [
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10];
-		mem Ⓓ[reg_init_a0_22245_32 + 0x4] + 0x8;
-		reg_init_a0_22245_32 + 0x10;
-		reg_init_a0_22245_32 + 0x8;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x8] + 0x4;
-		mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4;
-		reg_init_a0_22245_32 + 0x4
+		mem Ⓓ[a0 + 0x4] + 0x8;
+		mem Ⓓ[a0 + 0x10];
+		a0 + 0x10;
+		a0 + 0x4;
+		a0 + 0x8;
+		mem Ⓓ[a0 + 0x8] + 0x4;
+		mem Ⓓ[a0 + 0x10] + 0x4
       ].
 
 Definition noverlaps
     (mem : addr -> N)
-    (reg_init_a0_22245_32 : N)	(* a0 *)
-    :=  create_noverlaps (memory_regions mem reg_init_a0_22245_32).
+    (a0 : N)
+    :=  create_noverlaps (memory_regions mem a0).
 
 
 (* Invariants *)
 Definition uxListRemove_timing_invs 
     (mem : addr -> N)
-    (reg_init_a0_22245_32 : N)	(* a0 *)
+    (a0 : N)
     (t : trace) : option Prop :=
 match t with (Addr a, s) :: t' => match a with
-| 0x80002440 => Some (s R_A0 = Ⓓreg_init_a0_22245_32 /\
+| 0x80002440 => Some (s R_A0 = Ⓓa0 /\
 			s V_MEM32 = Ⓜmem /\
-			noverlaps mem reg_init_a0_22245_32 /\
+			noverlaps mem a0 /\
 			cycle_count_of_trace t' = 0)
 | 0x80002460 => Some (exists mem, s V_MEM32 = Ⓜmem /\
-			noverlaps mem reg_init_a0_22245_32 /\
+			noverlaps mem a0 /\
 			cycle_count_of_trace t' =   
   (* 0x80002440 *)   time_mem + time_mem + time_mem + time_mem + time_mem + time_mem
-                     + (if negb(mem Ⓓ[mem Ⓓ[reg_init_a0_22245_32 + 0x10] + 0x4] =? reg_init_a0_22245_32)
+                     + (if negb(mem Ⓓ[mem Ⓓ[a0 + 0x10] + 0x4] =? a0)
                        then
                          time_branch + 0
                        else
@@ -95,7 +95,7 @@ match t with (Addr a, s) :: t' => match a with
                        )
 		)
 | 0x80002470 => Some (exists mem, s V_MEM32 = Ⓜmem /\
-			time_of_uxListRemove t mem reg_init_a0_22245_32)
+			time_of_uxListRemove t mem a0)
 | _ => None end | _ => None end
 .
 

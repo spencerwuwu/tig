@@ -121,6 +121,7 @@ def make_static_memory_symbolic(
 def make_registers_symbolic(
     project: angr.Project, state: angr.SimState, reg_size: int = 8
 ):
+    # NOTE: This is currently not used
     """ Overwrite .data and .bss sections with symbolic values
 
     Args:
@@ -196,25 +197,40 @@ def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> 
 
     # Mapping 
     def symmem_add(state):
+        var_name = state.inspect.symbolic_name
         if verbose:
-            print(" + NEW", state.inspect.symbolic_name)
-        state.get_plugin("sym_mem").symbolic_references[state.inspect.symbolic_name] = None
+            print(" + NEW", var_name)
+        if var_name.startswith("reg_"):
+            reg_name = var_name.replace("reg_", "").split("_")[0]
+            size = int(var_name.rsplit("_")[-1]) // 8
+            if reg_name not in state.arch.register_names:
+                state.get_plugin("sym_mem").register_references[reg_name] = [var_name]
+            else:
+                state.get_plugin("sym_mem").register_references[reg_name].append(var_name)
+            state.get_plugin("sym_mem").symbolic_references[var_name] = (reg_name, size)
+        else:
+            state.get_plugin("sym_mem").symbolic_references[var_name] = None
 
     def symmem_mem_read(state):
         f = state.get_plugin("sym_mem").record_memory_read
+        length = state.inspect.mem_read_length
         repr = f(state.inspect.instruction, 
                  state.inspect.mem_read_address, 
-                 state.inspect.mem_read_expr)
+                 state.inspect.mem_read_expr,
+                 length)
         if verbose:
-            print(" MEM Read ", state.inspect.mem_read_expr, "from:", repr)
-            print(f"               ({state.inspect.mem_read_address})")
+            print( " MEM Read", state.inspect.mem_read_expr, "from:", repr)
+            print(f"          length: {length} bytes")
+            print(f"          ({state.inspect.mem_read_address})")
 
     def symmem_mem_write(state):
         f = state.get_plugin("sym_mem").record_memory_write
+        length = state.inspect.mem_write_length
         repr = f(state.inspect.instruction, state.inspect.mem_write_address)
         if verbose:
-            print(" MEM Write", state.inspect.mem_write_expr, "to:", repr)
-            print(f"               ({state.inspect.mem_write_address})")
+            print( " MEM Write", state.inspect.mem_write_expr, "to:", repr)
+            print(f"          length: {length} bytes")
+            print(f"          ({state.inspect.mem_write_address})")
 
     def skip_memory_constraints(state):
         state.inspect.address_concretization_add_constraints = False
@@ -236,15 +252,22 @@ def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> 
     def symmem_reg_write(state):
         reg_offset = state.inspect.reg_write_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
+        length = state.inspect.reg_write_length
         if verbose:
-            print(" REG Write", state.inspect.reg_write_expr, "to", reg_name)
+            print(" REG Write", state.inspect.reg_write_expr, "to", reg_name, ", length:", length)
         # NOTE: instructions arguments should be handled here
 
     def symmem_reg_read(state):
         reg_offset = state.inspect.reg_read_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
+        length = state.inspect.reg_read_length
+        f = state.get_plugin("sym_mem").record_register_read
         if verbose:
-            print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name)
+            print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name, ", length:", length)
+        _ = f(reg_name, 
+              state.inspect.reg_read_expr,
+              length)
+
         # NOTE: instructions arguments are handled here
         cur_instr = func.get_instruction(state.inspect.instruction)
         if cur_instr is None:
@@ -323,7 +346,7 @@ def exec_func(p: angr.Project,
 
     make_static_memory_symbolic(p, state, chunk_size=4)
 
-    init_regs = make_registers_symbolic(p, state, reg_size=8)
+    #init_regs = make_registers_symbolic(p, state, reg_size=8)
 
     hook_symmem(state, func, verbose)
 
@@ -369,7 +392,7 @@ def exec_func(p: angr.Project,
         "variables": state.get_plugin("sym_mem").variables,
         "branch_constraints": state.get_plugin("sym_mem").branch_constraints,
         "branch_history": state.get_plugin("sym_mem").recorded_history,
-        "registers": init_regs, # Used for proof synthesis
+        "registers": state.get_plugin("sym_mem").register_references, # Used for proof synthesis
     }
 
     for s in sm.found:
