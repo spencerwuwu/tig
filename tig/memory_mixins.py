@@ -191,6 +191,7 @@ class SymMemPlugin(SimStatePlugin):
             symbolic_name = list(symbolic_value.variables)[0]
             self.symbolic_references[symbolic_name] = (addr_repr, length)
         if addr_repr not in self.memory_regions:
+            print("herehere")
             self.memory_regions[addr_repr] = {"read":[instr_addr], "write":[]}
             self._add_variable(symbolic_value)
         else:
@@ -269,9 +270,7 @@ class SymMemPlugin(SimStatePlugin):
             # Terminals
             value = entry.args[0]
             if type(value) == str:
-                if re.match(r"((data)|(bss))_init_", value):
-                    return value
-                elif value.startswith("reg_"):
+                if value.startswith("reg_"):
                     return self.symbolic_references[value][0]
                 elif "CLZ" in value:
                     match_group = re.match(r"CLZ_{(.+)}.+", value)

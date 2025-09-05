@@ -45,7 +45,7 @@ Definition time_of_xTimerIsTimerActive (t : trace)
   : Prop :=
     cycle_count_of_trace t =
 (* 0x80003ec4 *)   ((* ERROR: csrrci [None, None, None] *) err_time) + 2 + time_mem + time_mem + 2
-                   + (if negb(data_init_0x80080004_1_32 =? 0x0)
+                   + (if negb(mem Ⓓ[0x80080004] =? 0x0)
                      then
                        time_branch + 
 (* 0x80003ee0 *)       time_branch
@@ -62,8 +62,8 @@ Definition memory_regions
     (mstatus : N)
     (a0 : N)
     := map (fun x => (4, x)) [
-		a0 + 0x28;
-		0x80080004
+		0x80080004;
+		a0 + 0x28
       ].
 
 Definition noverlaps
@@ -89,7 +89,7 @@ match t with (Addr a, s) :: t' => match a with
 			noverlaps mem mstatus a0 /\
 			cycle_count_of_trace t' =   
   (* 0x80003ec4 *)   ((* ERROR: csrrci [None, None, None] *) err_time) + 2 + time_mem + time_mem + 2
-                     + (if negb(data_init_0x80080004_1_32 =? 0x0)
+                     + (if negb(mem Ⓓ[0x80080004] =? 0x0)
                        then
                          time_branch + 0
                        else
