@@ -109,13 +109,15 @@ def make_static_memory_symbolic(
     for addr in range(data_section.min_addr, data_section.max_addr, chunk_size):
         sym_name = f"data_init_{hex(addr)}"
         symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
-        state.memory.store(addr, symbolic_value)
+        # NOTE: Reverse for little-endian
+        state.memory.store(addr, symbolic_value.reversed)
 
     # Process .bss section
     for addr in range(bss_section.min_addr, bss_section.max_addr, chunk_size):
         sym_name = f"bss_init_{hex(addr)}"
         symbolic_value = state.solver.BVS(sym_name, chunk_size * 8)
-        state.memory.store(addr, symbolic_value)
+        # NOTE: Reverse for little-endian
+        state.memory.store(addr, symbolic_value.reversed)
 
 
 def make_registers_symbolic(
@@ -220,8 +222,7 @@ def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> 
                  length)
         if verbose:
             print( " MEM Read", state.inspect.mem_read_expr, "from:", repr)
-            print(f"          length: {length} bytes")
-            print(f"          ({state.inspect.mem_read_address})")
+            print(f"          length: {length} bytes;", f"&({state.inspect.mem_read_address})")
 
     def symmem_mem_write(state):
         f = state.get_plugin("sym_mem").record_memory_write
@@ -229,8 +230,7 @@ def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> 
         repr = f(state.inspect.instruction, state.inspect.mem_write_address)
         if verbose:
             print( " MEM Write", state.inspect.mem_write_expr, "to:", repr)
-            print(f"          length: {length} bytes")
-            print(f"          ({state.inspect.mem_write_address})")
+            print(f"          length: {length} bytes;", f"&({state.inspect.mem_write_address})")
 
     def skip_memory_constraints(state):
         state.inspect.address_concretization_add_constraints = False
@@ -242,6 +242,11 @@ def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> 
         #    print("   Skip adding:", c)
 
     def symmem_path_constraint(state):
+        instr = func.get_instruction(state.inspect.instruction)
+        if instr is not None and instr.mnem.startswith("csr"):
+            if verbose:
+                print("  x Skip csr* constraints")
+            return
         f = state.get_plugin("sym_mem").record_path_constraint
         repr = f(list(state.history.bbl_addrs), state.inspect.added_constraints)
         if repr is not None and verbose:
@@ -255,51 +260,62 @@ def hook_symmem(state: angr.SimState, func: Function, verbose: bool = False) -> 
         length = state.inspect.reg_write_length
         if verbose:
             print(" REG Write", state.inspect.reg_write_expr, "to", reg_name, ", length:", length)
-        # NOTE: instructions arguments should be handled here
+        # We may be extending a smaller value into a larger register, update symbolic_references accordingly
+        # NOTE: see memory_mixins overwrite for limitations
+        state.get_plugin("sym_mem").record_register_write(reg_name, state.inspect.reg_write_expr, verbose)
+        # NOTE: instructions arguments may be handled here?
 
     def symmem_reg_read(state):
         reg_offset = state.inspect.reg_read_offset  # Get the register offset
         reg_name = state.arch.register_names.get(reg_offset, f"Unknown({reg_offset})")
         length = state.inspect.reg_read_length
-        f = state.get_plugin("sym_mem").record_register_read
         if verbose:
             print(" REG Read ", state.inspect.reg_read_expr, "from ", reg_name, ", length:", length)
-        _ = f(reg_name, 
-              state.inspect.reg_read_expr,
-              length)
+        #state.get_plugin("sym_mem").record_register_read(reg_name, state.inspect.reg_read_expr, length)
 
-        # NOTE: instructions arguments are handled here
+        # NOTE: instructions arguments may be handled here?
         cur_instr = func.get_instruction(state.inspect.instruction)
         if cur_instr is None:
             return
         if cur_instr.mnem == "clz":
             # NOTE: recorde clz "read" arg for timing 
             f = state.get_plugin("sym_mem").record_instr_arg
-            f("clz", list(state.history.bbl_addrs), state.inspect.instruction, state.inspect.reg_read_expr, 1)
+            bbl_addrs = state.get_plugin("sym_mem").bbl_history
+            f("clz", bbl_addrs, state.inspect.instruction, state.inspect.reg_read_expr, 1)
 
     def symmem_exit(state):
         jmp_target = state.inspect.exit_target
         guard = state.inspect.exit_guard
-        f = state.get_plugin("sym_mem").record_branch_jump
-        cn = f(list(state.history.bbl_addrs), guard, jmp_target)
-
-        if verbose:
-            print("*", hex(state.inspect.instruction), "->", hex(jmp_target), f"({state.inspect.exit_jumpkind})")
-            print(" Guard", cn)
-            #guard_str = guard.__repr__()
-            #if len(guard_str) > 150:
-            #    guard = guard[:150] + "..."
-            #print("\t", state.inspect.exit_jumpkind, guard)
+        instr = func.get_instruction(state.inspect.instruction)
+        if instr is not None and instr.mnem.startswith("csr"):
+            if verbose:
+                print("*", hex(state.inspect.instruction), "->", hex(jmp_target), f"({state.inspect.exit_jumpkind})")
+                print(" x Skip csr* Guard")
+        else:
+            f = state.get_plugin("sym_mem").record_branch_jump
+            bbl_addrs = state.get_plugin("sym_mem").bbl_history
+            cn = f(bbl_addrs, guard, jmp_target)
+            if verbose:
+                print("*", hex(state.inspect.instruction), "->", hex(jmp_target), f"({state.inspect.exit_jumpkind})")
+                print(" Guard", cn)
+        # NOTE: if the jump target is exactly the return address of the function, angr will
+        #       stop and not include the return block in the history, manually add it here
+        if jmp_target in func.block_dict.keys() and jmp_target in func.return_addrs:
+            state.get_plugin("sym_mem").history[jmp_target] = []
+            state.get_plugin("sym_mem").bbl_history.append(jmp_target)
 
     def record_addr(state):
-        instr = func.get_instruction(state.inspect.instruction)
+        instr_addr = state.inspect.instruction
+        instr = func.get_instruction(instr_addr)
         if verbose:
             if instr is not None:
                 print("\n->", instr)
             else:
-                print("\n->", hex(state.inspect.instruction), "??")
-        # TODO: May be useful for fine-grained records
-        state.get_plugin("sym_mem").history[state.inspect.instruction] = []
+                print("\n->", hex(instr_addr), "??")
+        if instr_addr in func.block_dict:
+            state.get_plugin("sym_mem").bbl_history.append(instr_addr)
+        # May be useful for fine-grained records?
+        state.get_plugin("sym_mem").history[instr_addr] = []
 
     state.inspect.b("instruction", when=angr.BP_BEFORE, action=record_addr)
     state.inspect.b("symbolic_variable", when=angr.BP_AFTER, action=symmem_add)
@@ -374,15 +390,9 @@ def exec_func(p: angr.Project,
         num_find=100,
     )
 
-    # NOTE: Currently I just return angr's default history
-    #       for the traversed blocks of each trace.
-    #       Alternatively, we can potentially collect more fine-grained
-    #       info with sym_mem's history>
-    #       We can also cover the constraints at the end, 
-    #       but I'm not sure if there's anything that changes
+    # NOTE: We could cover the constraints at the end, 
+    #       but I'm not sure if there's anything changed
     #       for the symbolic variable expansion.
-    #
-    #   "history": s.get_plugin("sym_mem").history, 
     #   "path_constraints": s.get_plugin("sym_mem").get_constraint_reprs(s.solver.constraints)        
     results = []
     if not sm.found:
@@ -396,9 +406,12 @@ def exec_func(p: angr.Project,
     }
 
     for s in sm.found:
+        # NOTE: cannot use s.history.bbl_addrs directly as angr will ignore last block 
+        #       if it's exactly the return address
+        print(f"Path to {hex(s.addr)}:", " -> ".join([hex(a) for a in s.get_plugin("sym_mem").bbl_history]))
         results.append({
             "end_address": s.addr,
-            "history": list(s.history.bbl_addrs), 
+            "bb_history": s.get_plugin("sym_mem").bbl_history, 
             "memory_regions": list(s.get_plugin("sym_mem").memory_regions.keys()),
             "path_constraints": s.get_plugin("sym_mem").path_constraints,
             "instruction_args": s.get_plugin("sym_mem").instruction_args,

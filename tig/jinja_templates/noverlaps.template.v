@@ -13,6 +13,9 @@ Definition time_branch : N :=
 Definition time_inf : N :=
     9999.
 
+Definition err_time : N := 
+    9999.
+
 (* Common for all timing proofs - facilitates automation *)
 Module {{func_name}}Time <: TimingModule.
   Definition time_of_addr (s : store) (a : addr) : N :=

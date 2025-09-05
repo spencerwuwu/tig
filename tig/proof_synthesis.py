@@ -87,7 +87,7 @@ def build_timing_tree(function,
                     # if not presented in constraint_node, failed
                     target_cn = None
                     for cn in constraint_nodes:
-                        if trace[:idx+1] == cn.history:
+                        if trace[:idx+1] == cn.bbl_history:
                             target_cn = cn
                             break
                     if target_cn is not None :
@@ -100,7 +100,7 @@ def build_timing_tree(function,
                             cur_node.false_child = TimingTreeNode(function.get_block(target_cn.false_jmp_target))
                     else:
                         # ERROR
-                        h = ", ".join(f"{hex(addr)}" for addr in trace[:idx+1])
+                        h = "[, ]".join(f"{hex(addr)}" for addr in trace[:idx+1])
                         raise ValueError(f"Cannot find ConstraintNode for trace {h}")
                 else:
                     if idx != len(trace) - 1:
@@ -271,7 +271,7 @@ def partial_dfs_timing_tree(node: TimingTreeNode,
                 next_node = node.false_child
                 msg = "Only-false"
             else:
-                history = ", ".join(f"{hex(addr)}" for addr in node.constraint_node.history)
+                history = ", ".join(f"{hex(addr)}" for addr in node.constraint_node.bbl_history)
                 raise ValueError(f"Preempted traces, {next_addr} not found in constraint node {history}")
 
             if verbose:
@@ -341,7 +341,8 @@ def gen_proof_postcondition(target_name: str,
 
     param_regs = _gen_reg_args(sym_info)
 
-    formula = dfs_timing_tree(timetree_root, [entry_point], [t["history"] for t in sym_traces], 1, verbose)
+    formula = dfs_timing_tree(timetree_root, [entry_point], 
+                              [t["bb_history"] for t in sym_traces], 1, verbose)
 
     time_of  = f"Definition time_of_{target_name} (t : trace)\n"
     time_of += mem_param
@@ -394,11 +395,11 @@ def gen_proof_invariants(target_name: str,
         print(f"+++ Partial timing tree for {target_name} +++")
 
     # Determine merging points
-    covered_blocks = set(sym_traces[0]["history"])
+    covered_blocks = set(sym_traces[0]["bb_history"])
     merge_points = set()
     for t in sym_traces[1:]:
         has_split = False
-        for b in t["history"]:
+        for b in t["bb_history"]:
             if not has_split:
                 if b in covered_blocks:
                     continue
@@ -412,7 +413,7 @@ def gen_proof_invariants(target_name: str,
 
     if verbose:
         for t in sym_traces:
-            print([hex(b) for b in t["history"]])
+            print([hex(b) for b in t["bb_history"]])
         print(f"Merge points: {[hex(mp) for mp in merge_points]}")
 
     # Generate invariant for each merging point
@@ -422,7 +423,8 @@ def gen_proof_invariants(target_name: str,
             print(f"\n=== Invariant for block {hex(merge_point)} ===")
 
         formula = partial_dfs_timing_tree(timetree_root, merge_point, [entry_point], 
-                                         [t["history"] for t in sym_traces if merge_point in t["history"]], 
+                                         [t["bb_history"] for t in sym_traces \
+                                                 if merge_point in t["bb_history"]], 
                                           1, verbose)
         # Increase padding
         formula = "\n".join("  " + line for line in formula.split("\n"))
@@ -538,13 +540,13 @@ def synthesize_noverlaps_proof(function: Function,
     entry_addr = hex(function.entry_point)
     end_addrs = []
     for t in sym_traces:
-        instr = function.get_block(t["history"][-1]).instructions[-1].offset
+        instr = function.get_block(t["bb_history"][-1]).instructions[-1].offset
         if instr not in end_addrs:
             end_addrs.append(instr) 
     end_addrs_str = "| " + " | ".join(hex(addr) for addr in end_addrs)
 
     root = build_timing_tree(function, 
-                             [t["history"] for t in sym_traces], 
+                             [t["bb_history"] for t in sym_traces], 
                              [t["instruction_args"] for t in sym_traces], 
                              sym_info["branch_constraints"])
 

@@ -1,7 +1,7 @@
 
 """ Overwrite Pcode's clz handler """
 from angr.engines.pcode.behavior import OpBehaviorLzcount
-from angr.state_plugins import history
+#from angr.state_plugins import history
 from claripy.ast.bv import BV, BVS
 
 orig_evaluate_unary = OpBehaviorLzcount.evaluate_unary
@@ -11,6 +11,39 @@ def sym_eval_lzcount(self, size_out: int, size_in: int, in1: BV) -> BV:
     return BVS("CLZ_{"+extracted_expr+"}", size_out * 8)
 
 OpBehaviorLzcount.evaluate_unary = sym_eval_lzcount
+
+
+""" Overwrite claripy BV's sign_extend and zero_extend """
+from claripy.ast.bv import ZeroExt, SignExt
+orig_sext = BV.sign_extend
+def sym_eval_sext(self: BV, extra_bits: int) -> BV:
+    # TODO: can only handle single variable now
+    if len(self.variables) == 1 and self.depth == 1:
+        #print("+++++++++sext overwrite on", self, "with", extra_bits)
+        extracted_expr,_ = self.args
+        print("+++++++++sext overwrite on", extracted_expr, "with", extra_bits)
+        if extracted_expr.startswith("CLZ"):
+            # CLZ should not be handled
+            return SignExt(extra_bits, self)
+        return BVS(extracted_expr, self.size() + extra_bits)
+    else:
+        return SignExt(extra_bits, self)
+BV.sign_extend = sym_eval_sext
+
+orig_zext = BV.zero_extend
+def sym_eval_zext(self: BV, extra_bits: int) -> BV:
+    # TODO: can only handle single variable now
+    if len(self.variables) == 1 and self.depth == 1:
+        #print("+++++++++zext overwrite on ", self, "with", extra_bits)
+        extracted_expr,_ = self.args
+        print("+++++++++zext overwrite on", extracted_expr, "with", extra_bits)
+        if extracted_expr.startswith("CLZ"):
+            # CLZ should not be handled
+            return ZeroExt(extra_bits, self)
+        return BVS(extracted_expr, self.size() + extra_bits)
+    else:
+        return ZeroExt(extra_bits, self)
+BV.zero_extend = sym_eval_zext
 
 
 """ Object to support recursive memory ref """
@@ -25,8 +58,8 @@ from claripy.operations import infix, prefix
 
 class ConstraintNode():
     """ Class to store brach conditions on a sym-exec path """
-    def __init__(self, history: List[int], constraint: BV, repr: str, inv_repr: str):
-        self.history = history
+    def __init__(self, bbl_history: List[int], constraint: BV, repr: str, inv_repr: str):
+        self.bbl_history = bbl_history
         self.bvv = constraint
         self.repr = repr
         self.inv_repr = inv_repr
@@ -41,15 +74,15 @@ class ConstraintNode():
             self.false_jmp_target = target
 
     def __repr__(self):
-        #return "[" + ", ".join(f"{hex(addr)}" for addr in self.history) + "]:\n\t" + self.repr
+        #return "[" + ", ".join(f"{hex(addr)}" for addr in self.bbl_history) + "]:\n\t" + self.repr
         guard_str = self.repr
         if len(guard_str) > 150:
             guard_str = guard_str[:150] + "..."
-        return f"  0x{self.history[-1]:x} => <0x{self.true_jmp_target:x}|0x{self.false_jmp_target:x}>:\n\t" + guard_str
+        return f"  0x{self.bbl_history[-1]:x} => <0x{self.true_jmp_target:x}|0x{self.false_jmp_target:x}>:\n\t" + guard_str
 
     def __str__(self):
-        #return "[" + ", ".join(f"{hex(addr)}" for addr in self.history) + "]: " + self.repr
-        return f"  0x{self.history[-1]:x} => <0x{self.true_jmp_target:x}|0x{self.false_jmp_target:x}>: " + self.repr
+        #return "[" + ", ".join(f"{hex(addr)}" for addr in self.bbl_history) + "]: " + self.repr
+        return f"  0x{self.bbl_history[-1]:x} => <0x{self.true_jmp_target:x}|0x{self.false_jmp_target:x}>: " + self.repr
 
 
 class SymMemPlugin(SimStatePlugin):
@@ -62,6 +95,7 @@ class SymMemPlugin(SimStatePlugin):
         recorded_history:    [ <instr_addr:int> ]                     # shared between states
         variables:           [ <symbolic_var:str> }                   # shared between states,
         history:             { <instr_addr>: [<TODO_info>] }
+        bbl_history:         [ <bbl_addr:int> ]
         instruction_args:    { <instr_mnem:str>: [(history:List[int], arg_repr:str, arg_idx:int)] }
         memory_regions:      { <symbolic_addr:str>: {"read":  [<instr_addr:int>],
                                                      "write": [<instr_addr:int>]
@@ -75,6 +109,7 @@ class SymMemPlugin(SimStatePlugin):
         - recorded_history:     help tracking the creation of branch_constraints, each CN should be unique
         - variables:            this helps creating function parameters in proof synthesis
         - history:              updates in tig.symbolic_execution.hook_symmem.record_addr, useless for now
+        - bbl_history:          track the basic block history of current state
         - instruction_args:     repr of symbolic arguments of instructions, used in proof synthesis
         - memory_regions:       tracks the usage of symbolic memory addresses, used in memory_no_overlap proof
         - registers_references: TODO: add comment 
@@ -124,11 +159,13 @@ class SymMemPlugin(SimStatePlugin):
                  register_references={},
                  variables=[],
                  history={}, 
+                 bbl_history=[],
                  instruction_args={},
                  memory_regions={}):
         super().__init__()
         self.symbolic_references = symbolic_references
         self.history = history
+        self.bbl_history = bbl_history
         self.path_constraints = path_constraints
         self.branch_constraints = branch_constraints
         self.register_references = register_references
@@ -143,7 +180,7 @@ class SymMemPlugin(SimStatePlugin):
             if v not in self.variables and \
                 v not in self.symbolic_references and \
                 not v.startswith("CLZ"):
-                # TODO: here?
+                # TODO: anything to do here?
                 if not v.startswith("data_init"):
                     raise NotImplementedError(f"Symbolic variable {v} not expected in constraints")
                 self.variables.append(v)
@@ -169,18 +206,20 @@ class SymMemPlugin(SimStatePlugin):
             self.memory_regions[addr_repr]["write"].append(instr_addr)
         return addr_repr
 
-    def record_register_read(self, reg_name: str, symbolic_value: BV, length: int)-> str:
-        return ""
-    #    if symbolic_value.depth != 1:
-    #        return self.get_repr(symbolic_value)
-    #    if not len(symbolic_value.variables):
-    #        return reg_name
-    #    symbolic_name = list(symbolic_value.variables)[0]
-    #    if symbolic_name in self.symbolic_references:
-    #        # Already recorded
-    #        return self.get_repr(symbolic_value)
-    #    self.symbolic_references[symbolic_name] = (reg_name, length)
-    #    return self.get_repr(symbolic_value)
+    def record_register_read(self, reg_name: str, symbolic_value: BV, length: int):
+        raise NotImplementedError()
+
+    def record_register_write(self, reg_name: str, symbolic_value: BV, verbose=False):
+        if symbolic_value.depth == 1 and len(symbolic_value.variables) == 1:
+            symbolic_name = list(symbolic_value.variables)[0]
+            if symbolic_name.startswith("CLZ"):
+                # don't track CLZ result
+                return
+            if symbolic_name not in self.symbolic_references:
+                old_name = symbolic_name.rsplit("_", 2)[0]
+                self.symbolic_references[symbolic_name] = self.symbolic_references[old_name]
+                if verbose:
+                    print(f"  +++++ register write: {reg_name} = {symbolic_value} <- {old_name}")
 
     def copy(self, memo):
         return SymMemPlugin(deepcopy(self.symbolic_references),
@@ -190,6 +229,7 @@ class SymMemPlugin(SimStatePlugin):
                             deepcopy(self.register_references),
                             self.variables,
                             deepcopy(self.history),
+                            deepcopy(self.bbl_history),
                             deepcopy(self.instruction_args),
                             deepcopy(self.memory_regions))
 
@@ -206,6 +246,8 @@ class SymMemPlugin(SimStatePlugin):
         if entry.depth > 1: 
             # Expand non-terminals
             if len(entry.args) > 1:
+                if entry.op not in infix:
+                    raise NotImplementedError(f"Cannot parse infix op {entry.op} in {entry}")
                 if str(infix[entry.op]) == "==":
                     op = "=?"
                     negate = False
@@ -220,6 +262,8 @@ class SymMemPlugin(SimStatePlugin):
                     repr = f"negb({repr})"
                 return repr
             else:
+                if entry.op not in prefix:
+                    raise NotImplementedError(f"Cannot parse prefix op {entry.op} in {entry}")
                 return f" {prefix[entry.op]} " + self.get_repr(entry.args[0])
         else: 
             # Terminals
@@ -248,10 +292,10 @@ class SymMemPlugin(SimStatePlugin):
     def get_constraint_reprs(self, constraints: List[BV])-> List[str]:
         return [self.get_repr(c) for c in constraints]
 
-    def record_path_constraint(self, history:List[int], constraints: Tuple[BV])-> str | None:
+    def record_path_constraint(self, bbl_history:List[int], constraints: Tuple[BV])-> str | None:
         c = constraints[0] if len(constraints) == 1 else None
         if c is None:
-            h = ", ".join(f"{hex(addr)}" for addr in history)
+            h = ", ".join(f"{hex(addr)}" for addr in bbl_history)
             raise ValueError(f"Expected a single constraint, got {len(constraints)}: {constraints} for trace {h}")
 
         # if no variable in c and eval to true, skip
@@ -269,7 +313,7 @@ class SymMemPlugin(SimStatePlugin):
 
 
     def record_branch_jump(self, 
-                           history:List[int], 
+                           bbl_history:List[int], 
                            guard: BV, 
                            jmp_target: int)-> ConstraintNode | None:
         # if no variable in c and eval to true, skip
@@ -282,29 +326,31 @@ class SymMemPlugin(SimStatePlugin):
         if repr not in self.path_constraints:
             self.path_constraints.append(repr)
 
-        if history not in self.recorded_history:
-            cn = ConstraintNode(history, guard, repr, self.get_repr(guard.__invert__()))
+        bbl_history = deepcopy(bbl_history)
+
+        if bbl_history not in self.recorded_history:
+            cn = ConstraintNode(bbl_history, guard, repr, self.get_repr(guard.__invert__()))
             cn.add_jmp_target(jmp_target, True)
             self.branch_constraints.append(cn)
-            self.recorded_history.append(history)
+            self.recorded_history.append(deepcopy(bbl_history))
             return cn
         else:
             target_cn = None
             for cn in self.branch_constraints:
-                if history == cn.history:
+                if bbl_history == cn.bbl_history:
                     target_cn = cn
                     break
             if target_cn is None :
                 # ERROR
-                h = ", ".join(f"{hex(addr)}" for addr in history)
-                raise ValueError(f"Cannot find ConstraintNode for history {h}")
+                h = ", ".join(f"{hex(addr)}" for addr in bbl_history)
+                raise ValueError(f"Cannot find ConstraintNode for bbl_history {h}")
 
             if target_cn.inv_repr == repr:
                 target_cn.add_jmp_target(jmp_target, False)
             else:
                 # ERROR
-                h = ", ".join(f"{hex(addr)}" for addr in history)
-                raise NotImplementedError(f"ConstraintNode {repr} misbehave at history {h}")
+                h = ", ".join(f"{hex(addr)}" for addr in bbl_history)
+                raise NotImplementedError(f"ConstraintNode {repr} misbehave at bbl_history {h}")
         return target_cn
 
     def record_instr_arg(self, instr:str, bb_history: List[int], addr:int, arg: BV, arg_idx: int)-> None:
