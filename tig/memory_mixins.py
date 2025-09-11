@@ -14,6 +14,7 @@ OpBehaviorLzcount.evaluate_unary = sym_eval_lzcount
 
 
 """ Overwrite claripy BV's sign_extend and zero_extend """
+# NOTE: this is probably called from angr/engines/pcode/emulate.py:_adjust_value_size
 from claripy.ast.bv import ZeroExt, SignExt
 orig_sext = BV.sign_extend
 def sym_eval_sext(self: BV, extra_bits: int) -> BV:
@@ -191,7 +192,6 @@ class SymMemPlugin(SimStatePlugin):
             symbolic_name = list(symbolic_value.variables)[0]
             self.symbolic_references[symbolic_name] = (addr_repr, length)
         if addr_repr not in self.memory_regions:
-            print("herehere")
             self.memory_regions[addr_repr] = {"read":[instr_addr], "write":[]}
             self._add_variable(symbolic_value)
         else:

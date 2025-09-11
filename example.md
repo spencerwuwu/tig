@@ -67,10 +67,23 @@ Compute merges block -> to generate pre-condition
   - include if-constraint content only if it's a splitting point
   - fall through if not a splitting point
 
-## Questions:
 
-convert reg_init_gp_22242_32 + 0xfffff880 to simplier rule
+## Questions:
+`xTimerIsTimerActive`
+What to do if merging point is one of the ending points?
+  -> can be ignored, since no more code after that?
+
+Convert `reg_init_gp_22242_32 + 0xfffff880` to simplier rule
 0xfffff880 -> picane notation "circled-plus/minus"
   (can be found in `vTaskSwitchContext`)
+1. Some can be simplified by using options (e.g. `angr.options.SIMPLIFY_REGISTER_WRITES`)
+2. Some are default negative integer in BVV will be converted to `0xff...`
 
-what to do with `andi`?
+Determine whether to use the notation can be a bit more tricky ?
+(Probably can do the trick of enabling above option back and  overwrite `angr/storage/memory_mixins/simplification_mixin.py`)
+Is it guarateed for all register arithmetics be modulated?
+How about memory calculation?
+
+
+## TODOS
+Add missing instruction time (Trivial)

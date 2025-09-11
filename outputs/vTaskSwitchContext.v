@@ -13,6 +13,9 @@ Definition time_branch : N :=
 Definition time_inf : N :=
     9999.
 
+Definition err_time : N := 
+    9999.
+
 (* Common for all timing proofs - facilitates automation *)
 Module vTaskSwitchContextTime <: TimingModule.
   Definition time_of_addr (s : store) (a : addr) : N :=
@@ -70,7 +73,7 @@ Definition time_of_vTaskSwitchContext (t : trace)
                                      then
                                        time_branch + 
 (* 0x800013e0 *)                       time_mem + 2 + (3 + clz (mem Ⓓ[gp + 0xfffff880]) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
-                                       + (if negb(mem Ⓓ[mem Ⓓ[gp + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + 0xfffffed4] + 0x4] =? 0xfffffed8 + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + gp)
+                                       + (if negb(mem Ⓓ[mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0x4] =? 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + gp + 0xfffffc6c)
                                          then
                                            time_branch + 
 (* 0x80001424 *)                           2 + 36 + time_mem + 2 + time_mem + time_mem + time_mem + time_mem + time_mem + 2 + time_branch
@@ -97,21 +100,21 @@ Definition memory_regions
     (mem : addr -> N)
     (gp : N)
     := map (fun x => (4, x)) [
-		0x7ffffffb;
 		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30];
-		0x7ffffff7;
-		gp + 0xfffff880;
-		mem Ⓓ[gp + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + 0xfffffed4] + 0xc;
-		gp + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + 0xfffffedc;
-		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x8;
-		mem Ⓓ[gp + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + 0xfffffed4] + 0x4;
-		gp + 0xfffff874;
-		gp + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + 0xfffffed4;
-		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0xc;
-		mem Ⓓ[gp + 0xfffff898] + 0x30;
-		gp + 0xfffff898;
 		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x4;
-		gp + 0xfffff860
+		gp + 0xfffff898;
+		0x7ffffffb;
+		gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68;
+		gp + 0xfffff860;
+		mem Ⓓ[gp + 0xfffff898] + 0x30;
+		0x7ffffff7;
+		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x8;
+		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0xc;
+		gp + 0xfffff880;
+		mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0x4;
+		mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0xc;
+		gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc70;
+		gp + 0xfffff874
       ].
 
 Definition noverlaps
@@ -144,7 +147,7 @@ match t with (Addr a, s) :: t' => match a with
   (* 0x800013c8 *)   time_mem + 
                        time_branch + 
   (* 0x800013e0 *)   time_mem + 2 + (3 + clz (mem Ⓓ[gp + 0xfffff880]) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
-                     + (if negb(mem Ⓓ[mem Ⓓ[gp + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + 0xfffffed4] + 0x4] =? 0xfffffed8 + 0xffffffec * CLZ(mem Ⓓ[gp + 0xfffff880]) + gp)
+                     + (if negb(mem Ⓓ[mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0x4] =? 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + gp + 0xfffffc6c)
                        then
                          time_branch + 0
                        else

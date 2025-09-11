@@ -358,6 +358,16 @@ def exec_func(p: angr.Project,
             angr.options.SYMBOLIC_INITIAL_VALUES,
             angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY
         },
+        remove_options={
+            angr.options.SIMPLIFY_REGISTER_WRITES,
+            angr.options.SIMPLIFY_MEMORY_WRITES,
+            angr.options.SIMPLIFY_REGISTER_READS,
+            # TODO: all of them??
+            angr.options.SIMPLIFY_MEMORY_READS,
+            angr.options.SIMPLIFY_CONSTRAINTS,
+            angr.options.SIMPLIFY_EXIT_GUARD,
+            angr.options.SIMPLIFY_EXPRS,
+            }
     )
 
     make_static_memory_symbolic(p, state, chunk_size=4)
