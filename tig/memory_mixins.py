@@ -235,6 +235,13 @@ class SymMemPlugin(SimStatePlugin):
                             deepcopy(self.memory_regions))
 
     def get_repr(self, entry: BV)-> str:
+        value, negate = self._get_repr(entry)
+        if negate:
+            value = f"(- {value})"
+        return value
+
+    def _get_repr(self, entry: BV)-> Tuple[str, bool]:
+        # Return <repr, to negate or not>
         def _deref(value: str, length: int)-> str:
             if length == 1:
                 return f"mem Ⓑ[{value}]"
@@ -258,20 +265,45 @@ class SymMemPlugin(SimStatePlugin):
                 else:
                     op = str(infix[entry.op])
                     negate = False
-                repr = f" {op} ".join(self.get_repr(arg) for arg in entry.args)
+                full_repr = ""
+                for arg in entry.args:
+                    arg_repr, arg_negate = self._get_repr(arg)
+                    print("HERE", arg, arg_repr, arg_negate)
+                    if full_repr == "":
+                        if arg_negate:
+                            arg_repr = f"(- {arg_repr})"
+                        else:
+                            full_repr = arg_repr
+                    else:
+                        if op == "*":
+                            op = "⊗"
+                        if arg_negate:
+                            if op == "+":
+                                cur_op = "⊖"
+                            elif op == "-":
+                                cur_op = "⊕"
+                            else:
+                                cur_op = op
+                                arg_repr = f"(- {arg_repr})"
+                            full_repr = f"{full_repr} {cur_op} {arg_repr}"
+                        else:
+                            full_repr = f"{full_repr} {op} {arg_repr}"
                 if negate:
-                    repr = f"negb({repr})"
-                return repr
+                    full_repr = f"negb({full_repr})"
+                return full_repr, False
             else:
                 if entry.op not in prefix:
                     raise NotImplementedError(f"Cannot parse prefix op {entry.op} in {entry}")
-                return f" {prefix[entry.op]} " + self.get_repr(entry.args[0])
+                full_repr, negate = self._get_repr(entry.args[0])
+                if negate: 
+                    raise NotImplementedError(f"Cannot parse nested negation in {entry}")
+                return f" {prefix[entry.op]} " + full_repr, negate
         else: 
             # Terminals
             value = entry.args[0]
             if type(value) == str:
                 if value.startswith("reg_"):
-                    return self.symbolic_references[value][0]
+                    return self.symbolic_references[value][0], False
                 elif "CLZ" in value:
                     match_group = re.match(r"CLZ_{(.+)}.+", value)
                     if not match_group:
@@ -279,14 +311,19 @@ class SymMemPlugin(SimStatePlugin):
                     clz_arg = match_group.group(1)
                     if clz_arg in self.symbolic_references:
                         content, length = self.symbolic_references[clz_arg]
-                        return f"CLZ({_deref(content, length)})"
+                        return f"CLZ({_deref(content, length)})", False
                     else:
                         raise NotImplementedError(f"Cannot find symbolic reference for {clz_arg}")
                 else:
                     content, length = self.symbolic_references[value]
-                    return f"{_deref(content, length)}"
+                    return f"{_deref(content, length)}", False
             else:
-                return f"0x{value:x}"
+                # should be a BVV, see if need to negate
+                orig_hex = f"{value:x}"
+                if orig_hex.startswith("f"):
+                    return f"0x{(-entry).args[0]:x}", True
+                else:
+                    return f"0x{value:x}", False
         
     def get_constraint_reprs(self, constraints: List[BV])-> List[str]:
         return [self.get_repr(c) for c in constraints]

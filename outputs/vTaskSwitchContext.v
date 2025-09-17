@@ -44,36 +44,36 @@ Definition time_of_vTaskSwitchContext (t : trace)
   : Prop :=
     cycle_count_of_trace t =
 (* 0x8000137c *)   time_mem
-                   + (if mem Ⓓ[gp + 0xfffff860] =? 0x0
+                   + (if mem Ⓓ[gp ⊖ 0x7a0] =? 0x0
                      then
                        time_branch + 
 (* 0x80001390 *)       2 + time_mem + time_mem + time_mem + 2 + time_mem + time_mem + 2 + time_mem
-                       + (if negb(mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30]] =? 0xa5a5a5a5)
+                       + (if negb(mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30]] =? 0xa5a5a5a5)
                          then
                            time_branch + 
 (* 0x800013d0 *)           time_inf
                          else
                            3 + 
 (* 0x800013b8 *)           time_mem
-                           + (if negb(mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x4] =? mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30]])
+                           + (if negb(mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0x4] =? mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30]])
                              then
                                time_branch + 
 (* 0x800013d0 *)               time_inf
                              else
                                3 + 
 (* 0x800013c0 *)               time_mem
-                               + (if negb(mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x8] =? mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x4])
+                               + (if negb(mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0x8] =? mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0x4])
                                  then
                                    time_branch + 
 (* 0x800013d0 *)                   time_inf
                                  else
                                    3 + 
 (* 0x800013c8 *)                   time_mem
-                                   + (if mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0xc] =? mem Ⓓ[mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x8]
+                                   + (if mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0xc] =? mem Ⓓ[mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0x8]
                                      then
                                        time_branch + 
-(* 0x800013e0 *)                       time_mem + 2 + (3 + clz (mem Ⓓ[gp + 0xfffff880]) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
-                                       + (if negb(mem Ⓓ[mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0x4] =? 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + gp + 0xfffffc6c)
+(* 0x800013e0 *)                       time_mem + 2 + (3 + clz (mem Ⓓ[gp ⊖ 0x780]) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
+                                       + (if negb(mem Ⓓ[mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 ⊖ 0x398] + 0x4] =? 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 + gp ⊖ 0x394)
                                          then
                                            time_branch + 
 (* 0x80001424 *)                           2 + 36 + time_mem + 2 + time_mem + time_mem + time_mem + time_mem + time_mem + 2 + time_branch
@@ -100,21 +100,21 @@ Definition memory_regions
     (mem : addr -> N)
     (gp : N)
     := map (fun x => (4, x)) [
-		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30];
-		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x4;
-		gp + 0xfffff898;
-		0x7ffffffb;
-		gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68;
-		gp + 0xfffff860;
-		mem Ⓓ[gp + 0xfffff898] + 0x30;
+		gp ⊖ 0x780;
+		gp + 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 ⊖ 0x398;
+		gp + 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 ⊖ 0x390;
+		mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30];
+		mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 ⊖ 0x398] + 0xc;
 		0x7ffffff7;
-		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0x8;
-		mem Ⓓ[mem Ⓓ[gp + 0xfffff898] + 0x30] + 0xc;
-		gp + 0xfffff880;
-		mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0x4;
-		mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0xc;
-		gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc70;
-		gp + 0xfffff874
+		gp ⊖ 0x768;
+		gp ⊖ 0x78c;
+		mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0x8;
+		mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 ⊖ 0x398] + 0x4;
+		mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0xc;
+		mem Ⓓ[mem Ⓓ[gp ⊖ 0x768] + 0x30] + 0x4;
+		gp ⊖ 0x7a0;
+		mem Ⓓ[gp ⊖ 0x768] + 0x30;
+		0x7ffffffb
       ].
 
 Definition noverlaps
@@ -146,8 +146,8 @@ match t with (Addr a, s) :: t' => match a with
                        3 + 
   (* 0x800013c8 *)   time_mem + 
                        time_branch + 
-  (* 0x800013e0 *)   time_mem + 2 + (3 + clz (mem Ⓓ[gp + 0xfffff880]) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
-                     + (if negb(mem Ⓓ[mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + 0xfffffc68] + 0x4] =? 0x1f - CLZ(mem Ⓓ[gp + 0xfffff880]) * 0x14 + gp + 0xfffffc6c)
+  (* 0x800013e0 *)   time_mem + 2 + (3 + clz (mem Ⓓ[gp ⊖ 0x780]) 32) + 2 + 2 + 36 + 2 + 2 + 2 + time_mem + 2 + 2 + time_mem + time_mem
+                     + (if negb(mem Ⓓ[mem Ⓓ[gp + 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 ⊖ 0x398] + 0x4] =? 0x1f - CLZ(mem Ⓓ[gp ⊖ 0x780]) ⊗ 0x14 + gp ⊖ 0x394)
                        then
                          time_branch + 0
                        else
