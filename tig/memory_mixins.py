@@ -268,7 +268,6 @@ class SymMemPlugin(SimStatePlugin):
                 full_repr = ""
                 for arg in entry.args:
                     arg_repr, arg_negate = self._get_repr(arg)
-                    print("HERE", arg, arg_repr, arg_negate)
                     if full_repr == "":
                         if arg_negate:
                             arg_repr = f"(- {arg_repr})"
